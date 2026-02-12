@@ -6,9 +6,15 @@ class FakeIntersectionObserver implements IntersectionObserver {
   readonly rootMargin: string = '';
   readonly thresholds: ReadonlyArray<number> = [];
 
-  observe(): void {}
-  unobserve(): void {}
-  disconnect(): void {}
+  observe(): void {
+    // Intentionally empty for SSR compatibility
+  }
+  unobserve(): void {
+    // Intentionally empty for SSR compatibility
+  }
+  disconnect(): void {
+    // Intentionally empty for SSR compatibility
+  }
   takeRecords(): IntersectionObserverEntry[] {
     return [];
   }
@@ -25,7 +31,7 @@ const MyIntersectionObserver =
  */
 export class ElementObserver {
   private observer: IntersectionObserver;
-  private elementsMap: Map<Element, Function> = new Map();
+  private elementsMap: Map<Element, (entry: IntersectionObserverEntry) => void> = new Map();
 
   constructor() {
     this.observer = new MyIntersectionObserver(
@@ -42,7 +48,7 @@ export class ElementObserver {
     });
   };
 
-  public registerCallback(element: Element, callback: Function): void {
+  public registerCallback(element: Element, callback: (entry: IntersectionObserverEntry) => void): void {
     this.observer.observe(element);
     this.elementsMap.set(element, callback);
   }

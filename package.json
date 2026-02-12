@@ -2,7 +2,13 @@
   "name": "@nxw/source",
   "version": "0.0.0",
   "license": "MIT",
-  "scripts": {},
+  "scripts": {
+    "build:lib": "nx build rive-angular",
+    "test:lib": "nx test rive-angular",
+    "lint:lib": "nx lint rive-angular",
+    "pack:lib": "cd dist/libs/rive-angular && npm pack --dry-run",
+    "publish:lib": "cd dist/libs/rive-angular && npm publish --access public"
+  },
   "private": true,
   "devDependencies": {
     "@angular-devkit/core": "~21.1.0",

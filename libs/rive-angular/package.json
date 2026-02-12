@@ -1,9 +1,21 @@
 {
   "name": "@grandgular/rive-angular",
   "version": "0.0.1",
+  "description": "Angular wrapper for Rive animations with reactive state management",
+  "keywords": [
+    "angular",
+    "rive",
+    "animation",
+    "canvas",
+    "graphics"
+  ],
   "peerDependencies": {
     "@angular/common": "^21.1.0",
-    "@angular/core": "^21.1.0"
+    "@angular/core": "^21.1.0",
+    "@rive-app/canvas": "^2.35.0"
+  },
+  "publishConfig": {
+    "access": "public"
   },
   "sideEffects": false
 }

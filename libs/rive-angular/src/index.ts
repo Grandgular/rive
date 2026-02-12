@@ -1,5 +1,5 @@
 /*
- * Public API Surface of @libs/rive-angular
+ * Public API Surface of @Grandgular/rive-angular
  */
 
 // Component

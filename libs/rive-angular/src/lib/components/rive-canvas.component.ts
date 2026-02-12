@@ -328,7 +328,7 @@ export class RiveCanvasComponent implements AfterViewInit {
           shouldDisableRiveListeners: this.shouldDisableRiveListeners(),
           automaticallyHandleEvents: this.automaticallyHandleEvents(),
           onLoad: () => this.onLoad(),
-          onLoadError: () => this.onLoadError(),
+          onLoadError: (error?: unknown) => this.onLoadError(error),
           onPlay: () => this.onPlay(),
           onPause: () => this.onPause(),
           onStop: () => this.onStop(),
@@ -385,9 +385,12 @@ export class RiveCanvasComponent implements AfterViewInit {
     });
   }
 
-  private onLoadError(): void {
+  private onLoadError(originalError?: unknown): void {
     this.#ngZone.run(() => {
-      const error = new RiveLoadError('Failed to load Rive animation');
+      const error = new RiveLoadError(
+        'Failed to load Rive animation',
+        originalError instanceof Error ? originalError : undefined,
+      );
       console.error('Rive load error:', error);
       this.loadError.emit(error);
     });

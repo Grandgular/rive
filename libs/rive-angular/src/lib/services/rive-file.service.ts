@@ -176,7 +176,7 @@ export class RiveFileService {
     stateSignal: ReturnType<typeof signal<RiveFileState>>,
     cacheKey: string,
   ): Promise<void> {
-    return new Promise<void>((resolve, reject) => {
+    return new Promise<void>((resolve) => {
       try {
         const file = new RiveFile(params);
         file.init();
@@ -211,7 +211,11 @@ export class RiveFileService {
 
           // Remove from pending loads
           this.pendingLoads.delete(cacheKey);
-          reject(new Error('Failed to load RiveFile'));
+
+          // Resolve (not reject) — error state is communicated via the signal.
+          // Rejecting would cause an unhandled promise rejection since no
+          // consumer awaits or catches this promise.
+          resolve();
         });
       } catch (error) {
         console.error('Failed to load RiveFile:', error);
@@ -222,7 +226,9 @@ export class RiveFileService {
 
         // Remove from pending loads
         this.pendingLoads.delete(cacheKey);
-        reject(error);
+
+        // Resolve (not reject) — error state is communicated via the signal.
+        resolve();
       }
     });
   }

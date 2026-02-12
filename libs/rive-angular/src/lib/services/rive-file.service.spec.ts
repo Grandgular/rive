@@ -100,15 +100,6 @@ describe('RiveFileService', () => {
       // Simulate load error
       const errorHandler = eventHandlers.get(EventType.LoadError);
       expect(errorHandler).toBeDefined();
-      
-      // Catch the rejected promise to avoid unhandled rejection
-      const pendingLoad = (service as any).pendingLoads.get('src:test.riv');
-      if (pendingLoad) {
-        pendingLoad.promise.catch(() => {
-          // Expected error, ignore
-        });
-      }
-      
       errorHandler!();
 
       setTimeout(() => {

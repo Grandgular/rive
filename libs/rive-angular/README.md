@@ -13,7 +13,7 @@ Modern Angular wrapper for [Rive](https://rive.app) animations with reactive sta
 
 This library provides a **modern, Angular-native** way to integrate Rive animations into your Angular applications:
 
-- 🚀 **Modern Angular**: Built with Angular 21+ signals, standalone components, and zoneless architecture
+- 🚀 **Modern Angular**: Built with Angular 18+ signals, standalone components, and zoneless architecture
 - ⚡ **Performance-first**: Runs outside Angular zone, uses OnPush change detection, and IntersectionObserver for automatic rendering optimization
 - 🎯 **Type-safe**: Full TypeScript support with strict typing
 - 🔄 **Reactive**: Signal-based API for reactive state management
@@ -29,7 +29,7 @@ This library provides a **modern, Angular-native** way to integrate Rive animati
 
 | Feature | @grandgular/rive-angular | ng-rive |
 |---------|--------------------------|---------|
-| Angular version | 21+ (modern) | 9-12 (legacy) |
+| Angular version | 18+ (modern) | 9-12 (legacy) |
 | Architecture | Signals, standalone | Modules, Zone.js |
 | Maintenance | ✅ Active | ❌ Abandoned (3+ years) |
 | TypeScript | Strict typing | Partial |
@@ -300,9 +300,9 @@ The library is fully compatible with Angular Universal and server-side rendering
 
 ## Requirements
 
-- Angular 21.1.0 or higher
+- Angular 18.0.0 or higher
 - @rive-app/canvas 2.35.0 or higher
-- TypeScript 5.9 or higher
+- TypeScript 5.4 or higher
 
 ## Contributing
 

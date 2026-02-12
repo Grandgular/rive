@@ -21,10 +21,11 @@ import {
   Layout,
   Fit,
   Alignment,
+  StateMachineInput,
   type LayoutParameters,
   Event as RiveEvent,
 } from '@rive-app/canvas';
-import { RiveLoadError, LoopMode } from '../models';
+import { RiveLoadError } from '../models';
 import { getElementObserver } from '../utils';
 
 /**
@@ -45,7 +46,6 @@ import { getElementObserver } from '../utils';
  *   src="assets/animations/rive/animation.riv"
  *   [stateMachines]="'StateMachine'"
  *   [autoplay]="true"
- *   [loop]="LoopMode.PingPong"
  *   [fit]="Fit.Cover"
  *   [alignment]="Alignment.Center"
  *   (loaded)="onLoad()"
@@ -93,13 +93,6 @@ export class RiveCanvasComponent implements AfterViewInit {
   public readonly animations = input<string | string[]>();
   public readonly stateMachines = input<string | string[]>();
   public readonly autoplay = input<boolean>(true);
-  /**
-   * Loop mode for animations. Note: The actual loop behavior is primarily
-   * controlled by the .riv file itself. This input is provided for
-   * documentation purposes and potential future enhancements.
-   * For now, ensure your .riv file is configured with the desired loop mode.
-   */
-  public readonly loop = input<LoopMode>();
   public readonly fit = input<Fit>(Fit.Contain);
   public readonly alignment = input<Alignment>(Alignment.Center);
   public readonly useOffscreenRenderer = input<boolean>(false);
@@ -158,22 +151,19 @@ export class RiveCanvasComponent implements AfterViewInit {
 
   constructor() {
     // Effect to reload animation when src, buffer, or riveFile changes
-    effect(
-      () => {
-        const src = this.src();
-        const buffer = this.buffer();
-        const riveFile = this.riveFile();
-        untracked(() => {
-          if (
-            (src || buffer || riveFile) &&
-            isPlatformBrowser(this.#platformId) &&
-            this.isInitialized
-          )
-            this.loadAnimation();
-        });
-      },
-      { allowSignalWrites: true },
-    );
+    effect(() => {
+      const src = this.src();
+      const buffer = this.buffer();
+      const riveFile = this.riveFile();
+      untracked(() => {
+        if (
+          (src || buffer || riveFile) &&
+          isPlatformBrowser(this.#platformId) &&
+          this.isInitialized
+        )
+          this.loadAnimation();
+      });
+    });
 
     // Auto cleanup on destroy
     this.#destroyRef.onDestroy(() => {
@@ -329,6 +319,7 @@ export class RiveCanvasComponent implements AfterViewInit {
         };
 
         // Create Rive instance configuration
+        // Using Record to allow dynamic property assignment
         const config: Record<string, unknown> = {
           canvas,
           autoplay: this.autoplay(),
@@ -366,6 +357,7 @@ export class RiveCanvasComponent implements AfterViewInit {
         const stateMachines = this.stateMachines();
         if (stateMachines) config['stateMachines'] = stateMachines;
 
+        // Safe type assertion - config contains all required properties
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
         this.#rive = new Rive(config as any);
 
@@ -395,8 +387,9 @@ export class RiveCanvasComponent implements AfterViewInit {
 
   private onLoadError(): void {
     this.#ngZone.run(() => {
-      console.error('Rive load error');
-      this.loadError.emit(new Error('Failed to load Rive animation'));
+      const error = new RiveLoadError('Failed to load Rive animation');
+      console.error('Rive load error:', error);
+      this.loadError.emit(error);
     });
   }
 
@@ -499,10 +492,10 @@ export class RiveCanvasComponent implements AfterViewInit {
 
     this.#ngZone.runOutsideAngular(() => {
       const inputs = this.#rive!.stateMachineInputs(stateMachineName);
-      const input = inputs.find((i: { name: string }) => i.name === inputName);
+      const input = inputs.find((i: StateMachineInput) => i.name === inputName);
 
-      if (input) {
-        (input as { value: number | boolean }).value = value;
+      if (input && 'value' in input) {
+        input.value = value;
       }
     });
   }
@@ -516,7 +509,7 @@ export class RiveCanvasComponent implements AfterViewInit {
     this.#ngZone.runOutsideAngular(() => {
       const inputs = this.#rive!.stateMachineInputs(stateMachineName);
       const input = inputs.find(
-        (i: { name: string }) => i.name === triggerName,
+        (i: StateMachineInput) => i.name === triggerName,
       );
 
       if (input && 'fire' in input && typeof input.fire === 'function') {

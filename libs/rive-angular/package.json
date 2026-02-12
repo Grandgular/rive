@@ -1,14 +1,36 @@
 {
   "name": "@grandgular/rive-angular",
   "version": "0.0.1",
-  "description": "Angular wrapper for Rive animations with reactive state management",
+  "description": "Modern Angular wrapper for Rive animations with reactive state management, built with signals and zoneless architecture",
   "keywords": [
     "angular",
     "rive",
     "animation",
     "canvas",
-    "graphics"
+    "graphics",
+    "state-machine",
+    "standalone",
+    "signals",
+    "typescript",
+    "ng",
+    "interactive",
+    "reactive"
   ],
+  "author": "Andrei Shpileuski",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/andreishpileuski/rive.git",
+    "directory": "libs/rive-angular"
+  },
+  "homepage": "https://github.com/andreishpileuski/rive/tree/main/libs/rive-angular#readme",
+  "bugs": {
+    "url": "https://github.com/andreishpileuski/rive/issues"
+  },
+  "engines": {
+    "node": ">=20.0.0",
+    "npm": ">=10.0.0"
+  },
   "peerDependencies": {
     "@angular/common": "^21.1.0",
     "@angular/core": "^21.1.0",

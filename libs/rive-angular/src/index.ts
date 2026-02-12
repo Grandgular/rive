@@ -17,7 +17,6 @@ export {
 export {
   Fit,
   Alignment,
-  LoopMode,
   RiveLoadError,
   EventType,
 } from './lib/models';

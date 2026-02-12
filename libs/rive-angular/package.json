@@ -1,6 +1,6 @@
 {
   "name": "@grandgular/rive-angular",
-  "version": "0.0.1",
+  "version": "1.0.0",
   "description": "Modern Angular wrapper for Rive animations with reactive state management, built with signals and zoneless architecture",
   "keywords": [
     "angular",

@@ -1,5 +1,4 @@
 import { ComponentFixture, TestBed } from '@angular/core/testing';
-import { Component, signal } from '@angular/core';
 import { RiveCanvasComponent } from './rive-canvas.component';
 import { Rive, RiveFile, Fit, Alignment } from '@rive-app/canvas';
 
@@ -71,9 +70,7 @@ describe('RiveCanvasComponent', () => {
       stateMachineInputs: jest.fn(() => []),
     } as unknown as jest.Mocked<Rive>;
 
-    (Rive as jest.MockedClass<typeof Rive>).mockImplementation(
-      () => mockRive,
-    );
+    (Rive as jest.MockedClass<typeof Rive>).mockImplementation(() => mockRive);
 
     await TestBed.configureTestingModule({
       imports: [RiveCanvasComponent],
@@ -116,10 +113,12 @@ describe('RiveCanvasComponent', () => {
   it('should emit loaded event on successful load', (done) => {
     let onLoadCallback: (() => void) | undefined;
 
-    (Rive as jest.MockedClass<typeof Rive>).mockImplementation((config: any) => {
-      onLoadCallback = config.onLoad;
-      return mockRive;
-    });
+    (Rive as jest.MockedClass<typeof Rive>).mockImplementation(
+      (config: any) => {
+        onLoadCallback = config.onLoad;
+        return mockRive;
+      },
+    );
 
     component.loaded.subscribe(() => {
       expect(component.isLoaded()).toBe(true);
@@ -135,10 +134,12 @@ describe('RiveCanvasComponent', () => {
   it('should emit loadError event on load failure', (done) => {
     let onLoadErrorCallback: (() => void) | undefined;
 
-    (Rive as jest.MockedClass<typeof Rive>).mockImplementation((config: any) => {
-      onLoadErrorCallback = config.onLoadError;
-      return mockRive;
-    });
+    (Rive as jest.MockedClass<typeof Rive>).mockImplementation(
+      (config: any) => {
+        onLoadErrorCallback = config.onLoadError;
+        return mockRive;
+      },
+    );
 
     component.loadError.subscribe((error) => {
       expect(error).toBeDefined();
@@ -251,10 +252,12 @@ describe('RiveCanvasComponent', () => {
     it('should update isPlaying signal on play', (done) => {
       let onPlayCallback: (() => void) | undefined;
 
-      (Rive as jest.MockedClass<typeof Rive>).mockImplementation((config: any) => {
-        onPlayCallback = config.onPlay;
-        return mockRive;
-      });
+      (Rive as jest.MockedClass<typeof Rive>).mockImplementation(
+        (config: any) => {
+          onPlayCallback = config.onPlay;
+          return mockRive;
+        },
+      );
 
       fixture.componentRef.setInput('src', 'test.riv');
       fixture.detectChanges();
@@ -271,10 +274,12 @@ describe('RiveCanvasComponent', () => {
     it('should update isPaused signal on pause', (done) => {
       let onPauseCallback: (() => void) | undefined;
 
-      (Rive as jest.MockedClass<typeof Rive>).mockImplementation((config: any) => {
-        onPauseCallback = config.onPause;
-        return mockRive;
-      });
+      (Rive as jest.MockedClass<typeof Rive>).mockImplementation(
+        (config: any) => {
+          onPauseCallback = config.onPause;
+          return mockRive;
+        },
+      );
 
       fixture.componentRef.setInput('src', 'test.riv');
       fixture.detectChanges();

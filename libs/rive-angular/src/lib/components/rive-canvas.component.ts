@@ -148,6 +148,9 @@ export class RiveCanvasComponent implements AfterViewInit {
   private isPausedByIntersectionObserver = false;
   private retestIntersectionTimeoutId: ReturnType<typeof setTimeout> | null =
     null;
+  private resizeRafId: number | null = null;
+  private lastWidth = 0;
+  private lastHeight = 0;
 
   constructor() {
     // Effect to reload animation when src, buffer, or riveFile changes
@@ -190,15 +193,31 @@ export class RiveCanvasComponent implements AfterViewInit {
     const dpr = window.devicePixelRatio || 1;
 
     this.resizeObserver = new ResizeObserver((entries) => {
+      // Cancel any pending resize frame
+      if (this.resizeRafId) {
+        cancelAnimationFrame(this.resizeRafId);
+      }
+
       for (const entry of entries) {
         const { width, height } = entry.contentRect;
 
-        // Set canvas size with device pixel ratio for sharp rendering
-        canvas.width = width * dpr;
-        canvas.height = height * dpr;
+        // Skip if dimensions haven't changed (prevents unnecessary updates)
+        if (width === this.lastWidth && height === this.lastHeight) {
+          continue;
+        }
 
-        // Resize Rive instance if it exists
-        if (this.#rive) this.#rive.resizeDrawingSurfaceToCanvas();
+        this.lastWidth = width;
+        this.lastHeight = height;
+
+        // Defer resize to next animation frame to prevent excessive updates in Safari
+        this.resizeRafId = requestAnimationFrame(() => {
+          // Set canvas size with device pixel ratio for sharp rendering
+          canvas.width = width * dpr;
+          canvas.height = height * dpr;
+
+          // Resize Rive instance if it exists
+          if (this.#rive) this.#rive.resizeDrawingSurfaceToCanvas();
+        });
       }
     });
 
@@ -209,6 +228,10 @@ export class RiveCanvasComponent implements AfterViewInit {
    * Disconnect ResizeObserver
    */
   private disconnectResizeObserver(): void {
+    if (this.resizeRafId) {
+      cancelAnimationFrame(this.resizeRafId);
+      this.resizeRafId = null;
+    }
     if (this.resizeObserver) {
       this.resizeObserver.disconnect();
       this.resizeObserver = null;

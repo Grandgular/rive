@@ -1,6 +1,6 @@
 {
   "name": "@grandgular/rive-angular",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "description": "Modern Angular wrapper for Rive animations with reactive state management, built with signals and zoneless architecture",
   "keywords": [
     "angular",
@@ -20,12 +20,12 @@
   "license": "MIT",
   "repository": {
     "type": "git",
-    "url": "https://github.com/andreishpileuski/rive.git",
+    "url": "https://github.com/Grandgular/rive.git",
     "directory": "libs/rive-angular"
   },
-  "homepage": "https://github.com/andreishpileuski/rive/tree/main/libs/rive-angular#readme",
+  "homepage": "https://github.com/Grandgular/rive/tree/main/libs/rive-angular#readme",
   "bugs": {
-    "url": "https://github.com/andreishpileuski/rive/issues"
+    "url": "https://github.com/Grandgular/rive/issues"
   },
   "engines": {
     "node": ">=20.0.0",

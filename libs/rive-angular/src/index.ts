@@ -19,8 +19,18 @@ export {
   Alignment,
   RiveLoadError,
   EventType,
+  RiveValidationError,
+  RiveErrorCode,
+  type RiveErrorOptions,
+  type RiveEvent
 } from './lib/models';
-export type { RiveEvent } from './lib/models';
+
+// Debug Configuration
+export {
+  provideRiveDebug,
+  type RiveDebugConfig,
+  type LogLevel
+} from './lib/utils/debug-config';
 
 // Re-export commonly used types from @rive-app/canvas for convenience
 export {

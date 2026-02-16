@@ -1,0 +1,60 @@
+/**
+ * Error codes used throughout the Rive Angular library.
+ *
+ * Ranges:
+ * - RIVE_1xx: Load errors (file not found, network, bad format)
+ * - RIVE_2xx: Validation errors (artboard, animation, state machine mismatch)
+ * - RIVE_3xx: Configuration/Usage errors (missing source, bad canvas)
+ */
+export enum RiveErrorCode {
+  // Load Errors
+  FileNotFound = 'RIVE_101',
+  InvalidFormat = 'RIVE_102',
+  NetworkError = 'RIVE_103',
+
+  // Validation Errors
+  ArtboardNotFound = 'RIVE_201',
+  AnimationNotFound = 'RIVE_202',
+  StateMachineNotFound = 'RIVE_203',
+  InputNotFound = 'RIVE_204',
+
+  // Configuration Errors
+  NoSource = 'RIVE_301',
+  InvalidCanvas = 'RIVE_302',
+}
+
+/**
+ * Template messages for each error code.
+ * Used by formatErrorMessage to generate user-friendly descriptions.
+ */
+export const ERROR_MESSAGES: Record<RiveErrorCode, string> = {
+  [RiveErrorCode.FileNotFound]: 'File not found: {url}',
+  [RiveErrorCode.InvalidFormat]: 'Invalid .riv file format',
+  [RiveErrorCode.NetworkError]: 'Network error while loading file',
+  [RiveErrorCode.ArtboardNotFound]: 'Artboard "{name}" not found',
+  [RiveErrorCode.AnimationNotFound]: 'Animation "{name}" not found',
+  [RiveErrorCode.StateMachineNotFound]: 'State machine "{name}" not found',
+  [RiveErrorCode.InputNotFound]: 'Input "{name}" not found in "{stateMachine}"',
+  [RiveErrorCode.NoSource]: 'No animation source provided',
+  [RiveErrorCode.InvalidCanvas]: 'Invalid canvas element',
+};
+
+/**
+ * Formats an error message by replacing placeholders with actual values.
+ *
+ * @param code - The error code
+ * @param params - Record of values to replace in the template (e.g. { name: 'MyAnim' })
+ * @returns The formatted error string
+ */
+export function formatErrorMessage(
+  code: RiveErrorCode,
+  params: Record<string, string> = {},
+): string {
+  let message = ERROR_MESSAGES[code] || 'Unknown Rive error';
+
+  for (const [key, value] of Object.entries(params)) {
+    message = message.replace(`{${key}}`, value);
+  }
+
+  return message;
+}

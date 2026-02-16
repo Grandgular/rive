@@ -1,5 +1,7 @@
-import { Injectable, signal, Signal } from '@angular/core';
+import { Injectable, signal, Signal, inject } from '@angular/core';
 import { RiveFile, EventType } from '@rive-app/canvas';
+import { RIVE_DEBUG_CONFIG } from '../utils';
+import { RiveLogger } from '../utils';
 
 /**
  * Status of RiveFile loading
@@ -20,6 +22,7 @@ export interface RiveFileState {
 export interface RiveFileParams {
   src?: string;
   buffer?: ArrayBuffer;
+  debug?: boolean;
 }
 
 /**
@@ -75,6 +78,11 @@ export class RiveFileService {
   private pendingLoads = new Map<string, PendingLoad>();
   private bufferIdCounter = 0;
 
+  // Optional debug configuration
+  private readonly globalDebugConfig = inject(RIVE_DEBUG_CONFIG, {
+    optional: true,
+  });
+
   /**
    * Load a RiveFile from URL or ArrayBuffer.
    * Returns a signal with the file state and loading status.
@@ -87,16 +95,22 @@ export class RiveFileService {
   public loadFile(params: RiveFileParams): Signal<RiveFileState> {
     const cacheKey = this.getCacheKey(params);
 
+    // Initialize logger for this request
+    const logger = new RiveLogger(this.globalDebugConfig, params.debug);
+    logger.debug(`RiveFileService: Request to load file`, { cacheKey });
+
     // Return cached entry if exists
     const cached = this.cache.get(cacheKey);
     if (cached) {
       cached.refCount++;
+      logger.debug(`RiveFileService: Cache hit for ${cacheKey}`);
       return cached.state;
     }
 
     // Return pending load if already in progress
     const pending = this.pendingLoads.get(cacheKey);
     if (pending) {
+      logger.debug(`RiveFileService: Reuse pending load for ${cacheKey}`);
       return pending.stateSignal.asReadonly();
     }
 
@@ -107,7 +121,7 @@ export class RiveFileService {
     });
 
     // Start loading and track as pending
-    const promise = this.loadRiveFile(params, stateSignal, cacheKey);
+    const promise = this.loadRiveFile(params, stateSignal, cacheKey, logger);
     this.pendingLoads.set(cacheKey, { stateSignal, promise });
 
     return stateSignal.asReadonly();
@@ -159,7 +173,9 @@ export class RiveFileService {
     if (params.buffer) {
       // For buffers, generate unique ID to avoid collisions
       // Store the ID on the buffer object itself
-      const bufferWithId = params.buffer as ArrayBuffer & { __riveBufferId?: number };
+      const bufferWithId = params.buffer as ArrayBuffer & {
+        __riveBufferId?: number;
+      };
       if (!bufferWithId.__riveBufferId) {
         bufferWithId.__riveBufferId = ++this.bufferIdCounter;
       }
@@ -169,67 +185,77 @@ export class RiveFileService {
   }
 
   /**
-   * Load RiveFile and update state signal
+   * Load RiveFile and update state signal.
+   * Addresses race condition by setting up listeners BEFORE init.
    */
-  private loadRiveFile(
+  private async loadRiveFile(
     params: RiveFileParams,
     stateSignal: ReturnType<typeof signal<RiveFileState>>,
     cacheKey: string,
+    logger: RiveLogger,
   ): Promise<void> {
-    return new Promise<void>((resolve) => {
-      try {
-        const file = new RiveFile(params);
-        file.init();
+    // Guard to ensure pending load is cleaned up exactly once
+    let pendingCleanupDone = false;
+    const finalizePendingLoadOnce = () => {
+      if (!pendingCleanupDone) {
+        this.pendingLoads.delete(cacheKey);
+        pendingCleanupDone = true;
+      }
+    };
 
-        file.on(EventType.Load, () => {
-          // Request an instance to increment reference count
-          // This prevents the file from being destroyed while in use
-          file.getInstance();
+    try {
+      // Extract debug parameter - it's not part of RiveFile SDK API
+      const { debug, ...sdkParams } = params;
+      const file = new RiveFile(sdkParams);
 
-          stateSignal.set({
-            riveFile: file,
-            status: 'success',
-          });
+      // Listeners must be attached BEFORE calling init() to avoid race conditions
+      // where init() completes or fails synchronously/immediately.
+      file.on(EventType.Load, () => {
+        logger.debug(`RiveFileService: File loaded successfully`, { cacheKey });
 
-          // Cache the successfully loaded file
-          this.cache.set(cacheKey, {
-            file,
-            state: stateSignal.asReadonly(),
-            refCount: 1,
-          });
+        // Request an instance to increment reference count
+        // This prevents the file from being destroyed while in use
+        file.getInstance();
 
-          // Remove from pending loads
-          this.pendingLoads.delete(cacheKey);
-          resolve();
+        stateSignal.set({
+          riveFile: file,
+          status: 'success',
         });
 
-        file.on(EventType.LoadError, () => {
-          stateSignal.set({
-            riveFile: null,
-            status: 'failed',
-          });
-
-          // Remove from pending loads
-          this.pendingLoads.delete(cacheKey);
-
-          // Resolve (not reject) — error state is communicated via the signal.
-          // Rejecting would cause an unhandled promise rejection since no
-          // consumer awaits or catches this promise.
-          resolve();
+        // Cache the successfully loaded file
+        this.cache.set(cacheKey, {
+          file,
+          state: stateSignal.asReadonly(),
+          refCount: 1,
         });
-      } catch (error) {
-        console.error('Failed to load RiveFile:', error);
+
+        finalizePendingLoadOnce();
+      });
+
+      file.on(EventType.LoadError, () => {
+        logger.warn(`RiveFileService: Failed to load file`, { cacheKey });
+
         stateSignal.set({
           riveFile: null,
           status: 'failed',
         });
 
-        // Remove from pending loads
-        this.pendingLoads.delete(cacheKey);
+        finalizePendingLoadOnce();
+      });
 
-        // Resolve (not reject) — error state is communicated via the signal.
-        resolve();
-      }
-    });
+      logger.debug(`RiveFileService: Initializing file`, { cacheKey });
+
+      // Await init() to catch initialization errors (e.g. WASM issues)
+      await file.init();
+    } catch (error) {
+      logger.error('RiveFileService: Unexpected error loading file', error);
+
+      stateSignal.set({
+        riveFile: null,
+        status: 'failed',
+      });
+
+      finalizePendingLoadOnce();
+    }
   }
 }

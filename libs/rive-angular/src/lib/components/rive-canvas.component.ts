@@ -26,7 +26,14 @@ import {
   Event as RiveEvent,
 } from '@rive-app/canvas';
 import { RiveLoadError } from '../models';
-import { getElementObserver } from '../utils';
+import {
+  getElementObserver,
+  RiveLogger,
+  RIVE_DEBUG_CONFIG,
+  validateConfiguration,
+  validateInput,
+  RiveErrorCode,
+} from '../utils';
 
 /**
  * Standalone Angular component for Rive animations
@@ -81,6 +88,7 @@ export class RiveCanvasComponent implements AfterViewInit {
   readonly #destroyRef = inject(DestroyRef);
   readonly #platformId = inject(PLATFORM_ID);
   readonly #ngZone = inject(NgZone);
+  readonly #globalDebugConfig = inject(RIVE_DEBUG_CONFIG, { optional: true });
 
   public readonly src = input<string>();
   public readonly buffer = input<ArrayBuffer>();
@@ -111,6 +119,14 @@ export class RiveCanvasComponent implements AfterViewInit {
    * Default is false for security - events must be handled manually via riveEvent output.
    */
   public readonly automaticallyHandleEvents = input<boolean>(false);
+
+  /**
+   * Enable debug mode for this specific instance.
+   * Overrides global configuration if set.
+   * - true: 'debug' level
+   * - false/undefined: use global level
+   */
+  public readonly debugMode = input<boolean>();
 
   // Outputs (Events)
   public readonly loaded = output<void>();
@@ -143,6 +159,7 @@ export class RiveCanvasComponent implements AfterViewInit {
 
   // Private state
   #rive: Rive | null = null;
+  private readonly logger: RiveLogger;
   private resizeObserver: ResizeObserver | null = null;
   private isInitialized = false;
   private isPausedByIntersectionObserver = false;
@@ -153,6 +170,13 @@ export class RiveCanvasComponent implements AfterViewInit {
   private lastHeight = 0;
 
   constructor() {
+    this.logger = new RiveLogger(this.#globalDebugConfig, this.debugMode());
+
+    // Effect to update logger level when debugMode changes
+    effect(() => {
+      this.logger.update(this.#globalDebugConfig, this.debugMode());
+    });
+
     // Effect to reload animation when src, buffer, or riveFile changes
     effect(() => {
       const src = this.src();
@@ -333,7 +357,27 @@ export class RiveCanvasComponent implements AfterViewInit {
         const buffer = this.buffer();
         const riveFile = this.riveFile();
 
-        if (!src && !buffer && !riveFile) return;
+        if (!src && !buffer && !riveFile) {
+          this.logger.warn(
+            'No animation source provided (src, buffer, or riveFile)',
+          );
+          this.#ngZone.run(() =>
+            this.loadError.emit(
+              new RiveLoadError({
+                message: 'No animation source provided',
+                code: RiveErrorCode.NoSource,
+              }),
+            ),
+          );
+          return;
+        }
+
+        this.logger.info(`Loading animation`, {
+          src: src || (buffer ? 'buffer' : 'riveFile'),
+          canvasWidth: canvas.width,
+          canvasHeight: canvas.height,
+          dpr: window.devicePixelRatio,
+        });
 
         // Build layout configuration
         const layoutParams: LayoutParameters = {
@@ -393,7 +437,11 @@ export class RiveCanvasComponent implements AfterViewInit {
         console.error('Failed to initialize Rive instance:', error);
         this.#ngZone.run(() =>
           this.loadError.emit(
-            new RiveLoadError('Failed to load Rive animation', error as Error),
+            new RiveLoadError({
+              message: 'Failed to initialize Rive instance',
+              code: RiveErrorCode.InvalidFormat,
+              cause: error instanceof Error ? error : undefined,
+            }),
           ),
         );
       }
@@ -402,6 +450,35 @@ export class RiveCanvasComponent implements AfterViewInit {
 
   // Event handlers (run inside Angular zone for change detection)
   private onLoad(): void {
+    // Validate loaded configuration
+    if (this.#rive) {
+      const validationErrors = validateConfiguration(
+        this.#rive,
+        {
+          artboard: this.artboard(),
+          animations: this.animations(),
+          stateMachines: this.stateMachines(),
+        },
+        this.logger,
+      );
+
+      // Emit validation errors via loadError output
+      if (validationErrors.length > 0) {
+        this.#ngZone.run(() => {
+          validationErrors.forEach((err) => this.loadError.emit(err));
+        });
+      }
+
+      // Log available assets in debug mode
+      // Note: These properties exist at runtime but may not be in type definitions
+      const riveWithMetadata = this.#rive as any;
+      this.logger.debug('Animation loaded successfully. Available assets:', {
+        artboards: riveWithMetadata.artboardNames,
+        animations: riveWithMetadata.animationNames,
+        stateMachines: riveWithMetadata.stateMachineNames,
+      });
+    }
+
     this.#ngZone.run(() => {
       this.isLoaded.set(true);
       this.loaded.emit();
@@ -410,11 +487,27 @@ export class RiveCanvasComponent implements AfterViewInit {
 
   private onLoadError(originalError?: unknown): void {
     this.#ngZone.run(() => {
-      const error = new RiveLoadError(
-        'Failed to load Rive animation',
-        originalError instanceof Error ? originalError : undefined,
-      );
-      console.error('Rive load error:', error);
+      // Determine probable cause and code
+      let code = RiveErrorCode.NetworkError;
+      let message = 'Failed to load Rive animation';
+
+      if (originalError instanceof Error) {
+        if (originalError.message.includes('404')) {
+          code = RiveErrorCode.FileNotFound;
+          message = `File not found: ${this.src()}`;
+        } else if (originalError.message.includes('format')) {
+          code = RiveErrorCode.InvalidFormat;
+          message = 'Invalid .riv file format';
+        }
+      }
+
+      const error = new RiveLoadError({
+        message,
+        code,
+        cause: originalError instanceof Error ? originalError : undefined,
+      });
+
+      this.logger.error('Rive load error:', error);
       this.loadError.emit(error);
     });
   }
@@ -517,6 +610,14 @@ export class RiveCanvasComponent implements AfterViewInit {
     if (!this.#rive) return;
 
     this.#ngZone.runOutsideAngular(() => {
+      // Validate input existence first
+      const error = validateInput(this.#rive!, stateMachineName, inputName);
+      if (error) {
+        this.logger.warn(error.message);
+        this.#ngZone.run(() => this.loadError.emit(error));
+        return;
+      }
+
       const inputs = this.#rive!.stateMachineInputs(stateMachineName);
       const input = inputs.find((i: StateMachineInput) => i.name === inputName);
 
@@ -533,6 +634,14 @@ export class RiveCanvasComponent implements AfterViewInit {
     if (!this.#rive) return;
 
     this.#ngZone.runOutsideAngular(() => {
+      // Validate trigger (input) existence first
+      const error = validateInput(this.#rive!, stateMachineName, triggerName);
+      if (error) {
+        this.logger.warn(error.message);
+        this.#ngZone.run(() => this.loadError.emit(error));
+        return;
+      }
+
       const inputs = this.#rive!.stateMachineInputs(stateMachineName);
       const input = inputs.find(
         (i: StateMachineInput) => i.name === triggerName,

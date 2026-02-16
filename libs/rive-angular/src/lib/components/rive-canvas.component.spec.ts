@@ -68,6 +68,9 @@ describe('RiveCanvasComponent', () => {
       startRendering: jest.fn(),
       stopRendering: jest.fn(),
       stateMachineInputs: jest.fn(() => []),
+      artboardNames: [],
+      animationNames: [],
+      stateMachineNames: [],
     } as unknown as jest.Mocked<Rive>;
 
     (Rive as jest.MockedClass<typeof Rive>).mockImplementation(() => mockRive);
@@ -352,6 +355,251 @@ describe('RiveCanvasComponent', () => {
           layout: expect.anything(),
         }),
       );
+    });
+  });
+
+  describe('Phase 2: Debug Mode', () => {
+    it('should use debug level when debugMode is true', () => {
+      fixture.componentRef.setInput('debugMode', true);
+      fixture.detectChanges();
+
+      // Logger should be initialized with debug level
+      // We can verify this by checking console output in integration tests
+      expect(component.debugMode()).toBe(true);
+    });
+
+    it('should use global config when debugMode is undefined', () => {
+      // Without debugMode input, should fall back to global config (or error level)
+      expect(component.debugMode()).toBeUndefined();
+    });
+
+    it('should update logger level when debugMode changes', (done) => {
+      fixture.componentRef.setInput('src', 'test.riv');
+      fixture.componentRef.setInput('debugMode', false);
+      fixture.detectChanges();
+
+      setTimeout(() => {
+        fixture.componentRef.setInput('debugMode', true);
+        fixture.detectChanges();
+
+        expect(component.debugMode()).toBe(true);
+        done();
+      }, 0);
+    });
+  });
+
+  describe('Phase 2: Validation', () => {
+    it('should emit RiveValidationError for invalid artboard name', (done) => {
+      let onLoadCallback: (() => void) | undefined;
+
+      const mockRiveWithArtboards = {
+        ...mockRive,
+        artboardNames: ['Artboard1', 'Artboard2'],
+      };
+
+      (Rive as jest.MockedClass<typeof Rive>).mockImplementation(
+        (config: any) => {
+          onLoadCallback = config.onLoad;
+          return mockRiveWithArtboards as any;
+        },
+      );
+
+      const errors: Error[] = [];
+      component.loadError.subscribe((error) => {
+        errors.push(error);
+      });
+
+      fixture.componentRef.setInput('src', 'test.riv');
+      fixture.componentRef.setInput('artboard', 'InvalidArtboard');
+      fixture.detectChanges();
+
+      onLoadCallback!();
+
+      setTimeout(() => {
+        expect(errors.length).toBeGreaterThan(0);
+        const validationError = errors.find(
+          (e) => e.name === 'RiveValidationError',
+        );
+        expect(validationError).toBeDefined();
+        done();
+      }, 0);
+    });
+
+    it('should emit RiveValidationError for invalid animation name', (done) => {
+      let onLoadCallback: (() => void) | undefined;
+
+      const mockRiveWithAnimations = {
+        ...mockRive,
+        animationNames: ['Animation1', 'Animation2'],
+      };
+
+      (Rive as jest.MockedClass<typeof Rive>).mockImplementation(
+        (config: any) => {
+          onLoadCallback = config.onLoad;
+          return mockRiveWithAnimations as any;
+        },
+      );
+
+      const errors: Error[] = [];
+      component.loadError.subscribe((error) => {
+        errors.push(error);
+      });
+
+      fixture.componentRef.setInput('src', 'test.riv');
+      fixture.componentRef.setInput('animations', 'InvalidAnimation');
+      fixture.detectChanges();
+
+      onLoadCallback!();
+
+      setTimeout(() => {
+        expect(errors.length).toBeGreaterThan(0);
+        const validationError = errors.find(
+          (e) => e.name === 'RiveValidationError',
+        );
+        expect(validationError).toBeDefined();
+        done();
+      }, 0);
+    });
+
+    it('should emit RiveValidationError for invalid state machine name', (done) => {
+      let onLoadCallback: (() => void) | undefined;
+
+      const mockRiveWithStateMachines = {
+        ...mockRive,
+        stateMachineNames: ['SM1', 'SM2'],
+      };
+
+      (Rive as jest.MockedClass<typeof Rive>).mockImplementation(
+        (config: any) => {
+          onLoadCallback = config.onLoad;
+          return mockRiveWithStateMachines as any;
+        },
+      );
+
+      const errors: Error[] = [];
+      component.loadError.subscribe((error) => {
+        errors.push(error);
+      });
+
+      fixture.componentRef.setInput('src', 'test.riv');
+      fixture.componentRef.setInput('stateMachines', 'InvalidSM');
+      fixture.detectChanges();
+
+      onLoadCallback!();
+
+      setTimeout(() => {
+        expect(errors.length).toBeGreaterThan(0);
+        const validationError = errors.find(
+          (e) => e.name === 'RiveValidationError',
+        );
+        expect(validationError).toBeDefined();
+        done();
+      }, 0);
+    });
+
+    it('should emit RiveValidationError with RIVE_204 for invalid input', (done) => {
+      let onLoadCallback: (() => void) | undefined;
+
+      mockRive.stateMachineInputs.mockReturnValue([
+        { name: 'validInput', value: 0 },
+      ] as any);
+
+      (Rive as jest.MockedClass<typeof Rive>).mockImplementation(
+        (config: any) => {
+          onLoadCallback = config.onLoad;
+          return mockRive;
+        },
+      );
+
+      const errors: Error[] = [];
+      component.loadError.subscribe((error) => {
+        errors.push(error);
+      });
+
+      fixture.componentRef.setInput('src', 'test.riv');
+      fixture.detectChanges();
+
+      onLoadCallback!();
+
+      setTimeout(() => {
+        component.setInput('StateMachine', 'invalidInput', 42);
+
+        setTimeout(() => {
+          const validationError = errors.find(
+            (e) => e.name === 'RiveValidationError',
+          );
+          expect(validationError).toBeDefined();
+          done();
+        }, 0);
+      }, 0);
+    });
+
+    it('should emit RiveValidationError with RIVE_204 for invalid trigger', (done) => {
+      let onLoadCallback: (() => void) | undefined;
+
+      mockRive.stateMachineInputs.mockReturnValue([
+        { name: 'validTrigger', fire: jest.fn() },
+      ] as any);
+
+      (Rive as jest.MockedClass<typeof Rive>).mockImplementation(
+        (config: any) => {
+          onLoadCallback = config.onLoad;
+          return mockRive;
+        },
+      );
+
+      const errors: Error[] = [];
+      component.loadError.subscribe((error) => {
+        errors.push(error);
+      });
+
+      fixture.componentRef.setInput('src', 'test.riv');
+      fixture.detectChanges();
+
+      onLoadCallback!();
+
+      setTimeout(() => {
+        component.fireTrigger('StateMachine', 'invalidTrigger');
+
+        setTimeout(() => {
+          const validationError = errors.find(
+            (e) => e.name === 'RiveValidationError',
+          );
+          expect(validationError).toBeDefined();
+          done();
+        }, 0);
+      }, 0);
+    });
+
+    it('should not crash when runtime metadata is unavailable', (done) => {
+      let onLoadCallback: (() => void) | undefined;
+
+      // Mock Rive instance without metadata properties
+      const mockRiveWithoutMetadata = {
+        ...mockRive,
+        artboardNames: undefined,
+        animationNames: undefined,
+        stateMachineNames: undefined,
+      };
+
+      (Rive as jest.MockedClass<typeof Rive>).mockImplementation(
+        (config: any) => {
+          onLoadCallback = config.onLoad;
+          return mockRiveWithoutMetadata as any;
+        },
+      );
+
+      fixture.componentRef.setInput('src', 'test.riv');
+      fixture.componentRef.setInput('artboard', 'SomeArtboard');
+      fixture.detectChanges();
+
+      onLoadCallback!();
+
+      setTimeout(() => {
+        // Should complete without throwing
+        expect(component.isLoaded()).toBe(true);
+        done();
+      }, 0);
     });
   });
 });

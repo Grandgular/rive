@@ -20,6 +20,7 @@ This library provides a **modern, Angular-native** way to integrate Rive animati
 - 🌐 **SSR-ready**: Full server-side rendering support
 - 🧹 **Automatic cleanup**: Proper resource management and lifecycle handling
 - 📦 **File caching**: Built-in service for preloading and caching .riv files
+- 🛠️ **Developer Experience**: Built-in debug mode, validation, and detailed error codes
 
 ### Comparison with alternatives
 
@@ -36,6 +37,7 @@ This library provides a **modern, Angular-native** way to integrate Rive animati
 | SSR support | ✅ Full | ⚠️ Limited |
 | Performance | Optimized (zoneless) | Standard |
 | File caching | ✅ Built-in service | ❌ Manual |
+| Validation | ✅ Built-in | ❌ None |
 
 #### vs. rive-react
 
@@ -185,6 +187,74 @@ export class PreloadComponent {
 }
 ```
 
+## Debug Mode
+
+The library provides a built-in debug mode to help you troubleshoot animations.
+
+### Global Configuration
+
+Enable debug mode globally in your `app.config.ts`:
+
+```typescript
+import { provideRiveDebug } from '@grandgular/rive-angular';
+
+export const appConfig: ApplicationConfig = {
+  providers: [
+    provideRiveDebug({ logLevel: 'debug' })
+  ]
+};
+```
+
+Available log levels: `'none' | 'error' | 'warn' | 'info' | 'debug'`
+
+### Local Override
+
+Enable debug mode for a specific component instance:
+
+```typescript
+<rive-canvas
+  src="assets/animation.riv"
+  [debugMode]="true" 
+/>
+```
+
+When debug mode is enabled, the library will log:
+- Loading progress and file details
+- Available artboards, animations, and state machines
+- Validation warnings (e.g., misspelled animation names)
+
+## Error Handling & Validation
+
+The library validates your configuration against the loaded Rive file and provides structured error codes.
+
+### Validation
+
+Validation errors (e.g., missing artboard or animation) are **non-fatal**. They are emitted via the `loadError` output but do not crash the application.
+
+```typescript
+<rive-canvas
+  src="assets/anim.riv"
+  [artboard]="'WrongName'"
+  (loadError)="onError($event)"
+/>
+```
+
+In this case, `onError` receives a `RiveValidationError` with code `RIVE_201`, and the library logs a warning with available artboard names.
+
+### Error Codes
+
+| Code | Type | Description |
+|------|------|-------------|
+| `RIVE_101` | Load | File not found (404) |
+| `RIVE_102` | Load | Invalid .riv file format |
+| `RIVE_103` | Load | Network error |
+| `RIVE_201` | Validation | Artboard not found |
+| `RIVE_202` | Validation | Animation not found |
+| `RIVE_203` | Validation | State machine not found |
+| `RIVE_204` | Validation | Input/Trigger not found in State Machine |
+| `RIVE_301` | Config | No animation source provided |
+| `RIVE_302` | Config | Invalid canvas element |
+
 ## API Reference
 
 ### RiveCanvasComponent
@@ -206,6 +276,7 @@ export class PreloadComponent {
 | `shouldUseIntersectionObserver` | `boolean` | `true` | Auto-pause when off-screen |
 | `shouldDisableRiveListeners` | `boolean` | `false` | Disable Rive event listeners |
 | `automaticallyHandleEvents` | `boolean` | `false` | Auto-handle Rive events (e.g., OpenUrlEvent) |
+| `debugMode` | `boolean` | `undefined` | Enable verbose logging for this instance |
 
 #### Outputs
 
@@ -255,6 +326,7 @@ Service for preloading and caching .riv files.
 interface RiveFileParams {
   src?: string;
   buffer?: ArrayBuffer;
+  debug?: boolean;
 }
 
 interface RiveFileState {
@@ -277,26 +349,6 @@ The library is fully compatible with Angular Universal and server-side rendering
 2. **Preload files**: Use `RiveFileService` to preload and cache .riv files for instant display
 3. **Disable unnecessary listeners**: Set `shouldDisableRiveListeners` to `true` for decorative animations without interactivity
 4. **Use OnPush**: The component already uses `OnPush` change detection for optimal performance
-
-## Troubleshooting
-
-### Animation not loading
-
-- Verify the .riv file path is correct
-- Check browser console for errors
-- Ensure `@rive-app/canvas` is installed
-
-### State machine inputs not working
-
-- Verify state machine and input names match your .riv file
-- Check that the animation has loaded before calling `setInput` or `fireTrigger`
-- Use the `loaded` output to ensure timing
-
-### Memory leaks with RiveFileService
-
-- Always call `releaseFile` when done with a file
-- Use `DestroyRef.onDestroy` to auto-release files on component destroy
-- The service uses reference counting - files are only cleaned up when ref count reaches 0
 
 ## Requirements
 

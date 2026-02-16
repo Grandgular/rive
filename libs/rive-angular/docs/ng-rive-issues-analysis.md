@@ -12,9 +12,9 @@ The ng-rive library, while pioneering Angular support for Rive animations, has b
 | Memory Management | 5 | ✅ Fully resolved |
 | Dependency Injection / Module Setup | 4 | ✅ Fully resolved |
 | Missing Features | 6 | ⏳ Partially addressed |
-| Documentation / DX | 2 | ⏳ Needs improvement |
+| Documentation / DX | 2 | ✅ Fully resolved (Phase 2) |
 
-**Result**: @grandgular/rive-angular already prevents **~80% of issues** that plagued ng-rive users.
+**Result**: @grandgular/rive-angular already prevents **~85% of issues** that plagued ng-rive users.
 
 ---
 
@@ -231,37 +231,26 @@ Issues related to error messages and documentation quality.
 | [#22](https://github.com/dappsnation/ng-rive/issues/22) | Could not load animation | No guidance on animation name mismatch |
 | [#58](https://github.com/dappsnation/ng-rive/issues/58) | documentation error | Typo "tigger" instead of "trigger" |
 
-#### How @grandgular/rive-angular Addresses These
+#### How @grandgular/rive-angular Addresses These (Phase 2 Implemented)
 
-```typescript
-// Custom error class with context
-export class RiveLoadError extends Error {
-  constructor(
-    message: string,
-    public readonly cause?: Error
-  ) {
-    super(message);
-    this.name = 'RiveLoadError';
-  }
-}
+We have implemented a comprehensive **Developer Experience (DX)** update in Phase 2 to solve these issues permanently:
 
-// Error handling with context
-private onLoadError(originalError?: unknown): void {
-  const error = new RiveLoadError(
-    'Failed to load Rive animation',
-    originalError instanceof Error ? originalError : undefined
-  );
-  console.error('Rive load error:', error);
-  this.loadError.emit(error);
-}
-```
+1.  **Strict Validation**: The library now validates artboard, animation, and state machine names against the loaded file.
+    *   Mismatch errors are **non-fatal** (do not crash the app).
+    *   Errors are emitted via `loadError` output with code `RIVE_2xx`.
+    *   Console warnings include "Did you mean...?" suggestions listing available options.
 
-**Improvements needed:**
+2.  **Debug Mode**: A new `[debugMode]="true"` input enables verbose logging:
+    *   Logs file loading progress and cache hits.
+    *   Lists all available artboards/animations upon load.
+    *   Shows validation warnings with suggestions.
 
-1. Add error codes with specific suggestions
-2. Include documentation links in error messages
-3. Validate animation/state machine names before use
-4. Provide detailed troubleshooting guide
+3.  **Error Codes**: Structured error codes for programmatic handling:
+    *   `RIVE_1xx`: Load errors (404, bad format)
+    *   `RIVE_2xx`: Validation errors (missing assets)
+    *   `RIVE_3xx`: Configuration errors (no source)
+
+This explicitly resolves issues #23 and #22 by providing actionable feedback instead of generic failures.
 
 ---
 
@@ -281,7 +270,7 @@ private onLoadError(originalError?: unknown): void {
 | #53 | Instance deleted | Critical | ✅ Resolved | Proper cleanup |
 | #52 | Multiple artboards | Critical | ✅ Resolved | No shared state |
 | #50 | Standalone errors | High | ✅ Resolved | 100% standalone |
-| #23 | Error messages | Medium | ⏳ Partial | Basic errors, needs improvement |
+| #23 | Error messages | Medium | ✅ Resolved | Phase 2 (Error Codes) |
 | #10 | autoreset | Low | ⏳ Not yet | Planned feature |
 
 ### Closed Issues (19)
@@ -300,7 +289,7 @@ private onLoadError(originalError?: unknown): void {
 | #26 | Lazy module error | Cache issue | ✅ Ref counting |
 | #25 | OffscreenCanvas | TypeScript config | ✅ Proper types |
 | #24 | CSP unsafe-eval | Old WASM | ✅ Modern runtime |
-| #22 | Animation load error | Bad error msg | ⏳ Needs work |
+| #22 | Animation load error | Bad error msg | ✅ Resolved (Validation) |
 | #20 | State machine error | API change | ✅ Modern API |
 | #17 | apply undefined | Angular 11 | ✅ Angular 18+ only |
 | #16 | undefined object | Old .riv format | ✅ Modern format |
@@ -335,6 +324,7 @@ private onLoadError(originalError?: unknown): void {
 │              │    advanced        │ ◄── Manual WASM      │
 │              └────────────────────┘                      │
 └─────────────────────────────────────────────────────────┘
+```
 
 Problems:
 - Shared state causes race conditions
@@ -342,7 +332,6 @@ Problems:
 - Injection tokens complicate setup
 - Manual WASM management
 - Module-based architecture
-```
 
 ### @grandgular/rive-angular Architecture (Solution)
 
@@ -379,6 +368,7 @@ Problems:
 │  │  clearCache() ──► Clears all cached files           ││
 │  └─────────────────────────────────────────────────────┘│
 └─────────────────────────────────────────────────────────┘
+```
 
 Benefits:
 ✓ Single self-contained component
@@ -387,7 +377,6 @@ Benefits:
 ✓ Signal-based reactivity
 ✓ Automatic resource cleanup
 ✓ Optional caching service
-```
 
 ---
 
@@ -404,11 +393,12 @@ Based on ng-rive issues analysis, here are features to consider:
 - [x] State signals (isPlaying, isPaused, isLoaded)
 - [x] File caching with reference counting
 
-### Phase 2: Enhanced Developer Experience (In Progress)
+### Phase 2: Enhanced Developer Experience ✅ Complete
 
-- [ ] Improved error messages with codes and suggestions
-- [ ] Validation of animation/state machine names
-- [ ] Debug mode with verbose logging
+- [x] Improved error messages with codes and suggestions
+- [x] Validation of animation/state machine names
+- [x] Debug mode with verbose logging
+- [x] Race condition fixes in RiveFileService
 
 ### Phase 3: Advanced Features (Planned)
 
@@ -424,12 +414,12 @@ Based on ng-rive issues analysis, here are features to consider:
 
 The @grandgular/rive-angular library was designed with the explicit goal of **preventing the issues that plagued ng-rive users**. Through:
 
-1. **Modern architecture**: Standalone components, signals, zoneless-ready
-2. **Proper resource management**: Synchronous cleanup, no shared state
-3. **Zero configuration**: Works out of the box without injection tokens
-4. **Clear API boundaries**: Single component with well-defined inputs/outputs
+1.  **Modern architecture**: Standalone components, signals, zoneless-ready
+2.  **Proper resource management**: Synchronous cleanup, no shared state
+3.  **Zero configuration**: Works out of the box without injection tokens
+4.  **Clear API boundaries**: Single component with well-defined inputs/outputs
 
-We have successfully prevented **80% of the issues** that ng-rive users faced. The remaining 20% are feature requests that can be addressed through the `riveInstance` signal workaround today, with dedicated methods planned for future releases.
+We have successfully prevented **85% of the issues** that ng-rive users faced. The remaining 15% are feature requests that can be addressed through the `riveInstance` signal workaround today, with dedicated methods planned for future releases.
 
 ---
 

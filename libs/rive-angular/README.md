@@ -283,12 +283,14 @@ In this case, `onError` receives a `RiveValidationError` with code `RIVE_201`, a
 | Output | Type | Description |
 |--------|------|-------------|
 | `loaded` | `void` | Emitted when animation loads successfully |
-| `loadError` | `Error` | Emitted when animation fails to load |
+| `loadError` | `Error` | Emitted when animation fails to load or validation errors occur |
 | `stateChange` | `RiveEvent` | Emitted on state machine state changes |
 | `riveEvent` | `RiveEvent` | Emitted for custom Rive events |
-| `riveReady` | `Rive` | Emitted when Rive instance is created |
+| `riveReady` | `Rive` | Emitted when Rive instance is **fully loaded** and ready (after `loaded`) |
 
-#### Public Signals
+#### Public Signals (Readonly)
+
+All signals are **readonly** and cannot be mutated externally. Use the public methods to control the animation.
 
 | Signal | Type | Description |
 |--------|------|-------------|
@@ -296,6 +298,8 @@ In this case, `onError` receives a `RiveValidationError` with code `RIVE_201`, a
 | `isPaused` | `Signal<boolean>` | Whether animation is paused |
 | `isLoaded` | `Signal<boolean>` | Whether animation is loaded |
 | `riveInstance` | `Signal<Rive \| null>` | Direct access to Rive instance |
+
+**Note:** Signals are readonly to prevent external mutation. Use component methods (`playAnimation()`, `pauseAnimation()`, etc.) to control the animation state.
 
 #### Public Methods
 
@@ -349,6 +353,25 @@ The library is fully compatible with Angular Universal and server-side rendering
 2. **Preload files**: Use `RiveFileService` to preload and cache .riv files for instant display
 3. **Disable unnecessary listeners**: Set `shouldDisableRiveListeners` to `true` for decorative animations without interactivity
 4. **Use OnPush**: The component already uses `OnPush` change detection for optimal performance
+5. **Reactive updates**: The component now reactively updates layout when `fit` or `alignment` change without full reload
+
+## Recent Improvements (v0.2.0)
+
+### Quality & Stability
+- ✅ **Readonly signals** prevent accidental state mutation
+- ✅ **Dynamic DPR** support for multi-monitor setups
+- ✅ **Reactive configuration** - all inputs trigger appropriate updates
+- ✅ **Type-safe configuration** - eliminated unsafe type assertions
+- ✅ **Fixed race conditions** in file service and cache management
+- ✅ **Proper timing** - `riveReady` emits after full load
+
+### Developer Experience
+- 🛠️ **Enhanced validation** with detailed error messages
+- 🐛 **Comprehensive debugging** via `provideRiveDebug()`
+- 📝 **Better error codes** for programmatic error handling
+- 🧪 **Improved testability** with DI-based services
+
+See [CHANGELOG.md](./CHANGELOG.md) for complete details, migration guide, and all improvements.
 
 ## Requirements
 

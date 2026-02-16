@@ -14,10 +14,12 @@ This library provides a **modern, Angular-native** way to integrate Rive animati
 - 🎯 **Type-safe**: Full TypeScript support with strict typing
 - 🔄 **Reactive**: Signal-based API for reactive state management
 - 🛠️ **Developer Experience**: Built-in debug mode, validation, and detailed error codes
+- 🔒 **Production-ready**: Comprehensive audit completed, all critical issues resolved (v0.2.0)
 
 ## Documentation
 
 - [Full Documentation](libs/rive-angular/README.md)
+- [Changelog](libs/rive-angular/CHANGELOG.md)
 - [Issues Analysis & Roadmap](libs/rive-angular/docs/ng-rive-issues-analysis.md)
 
 ## Installation

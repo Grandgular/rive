@@ -1,3 +1,6 @@
+import { Injectable, inject, PLATFORM_ID } from '@angular/core';
+import { isPlatformBrowser } from '@angular/common';
+
 /**
  * Fake IntersectionObserver for environments where it's not available (e.g., SSR)
  */
@@ -28,15 +31,26 @@ const MyIntersectionObserver =
  * Singleton IntersectionObserver wrapper for observing multiple elements
  * with individual callbacks. This avoids creating multiple IntersectionObserver
  * instances which is more efficient.
+ * 
+ * Provided as an Angular service for better testability and DI integration.
  */
+@Injectable({
+  providedIn: 'root',
+})
 export class ElementObserver {
   private observer: IntersectionObserver;
   private elementsMap: Map<Element, (entry: IntersectionObserverEntry) => void> = new Map();
+  private readonly platformId = inject(PLATFORM_ID);
 
   constructor() {
-    this.observer = new MyIntersectionObserver(
-      this.onObserved,
-    ) as IntersectionObserver;
+    // Only create real observer in browser environment
+    if (isPlatformBrowser(this.platformId)) {
+      this.observer = new MyIntersectionObserver(
+        this.onObserved,
+      ) as IntersectionObserver;
+    } else {
+      this.observer = new FakeIntersectionObserver();
+    }
   }
 
   private onObserved = (entries: IntersectionObserverEntry[]): void => {
@@ -59,15 +73,17 @@ export class ElementObserver {
   }
 }
 
-// Singleton instance
-let observerInstance: ElementObserver | null = null;
+// Legacy function for backward compatibility
+// New code should inject ElementObserver directly
+let legacyObserverInstance: ElementObserver | null = null;
 
 /**
+ * @deprecated Use dependency injection instead: `inject(ElementObserver)`
  * Get the singleton ElementObserver instance
  */
 export function getElementObserver(): ElementObserver {
-  if (!observerInstance) {
-    observerInstance = new ElementObserver();
+  if (!legacyObserverInstance) {
+    legacyObserverInstance = new ElementObserver();
   }
-  return observerInstance;
+  return legacyObserverInstance;
 }

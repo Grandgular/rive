@@ -16,6 +16,7 @@ export function validateArtboard(
   try {
     // Safe check: ensure artboardNames exist on runtime
     // Note: These properties exist at runtime but may not be in type definitions
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const available = (rive as any).artboardNames;
     if (!available || !available.includes(requestedName)) {
       return new RiveValidationError(
@@ -29,7 +30,7 @@ export function validateArtboard(
           : 'No artboards found in file',
       );
     }
-  } catch (e) {
+  } catch {
     // Graceful fallback if runtime metadata is not accessible
     // Return null silently to avoid breaking validation flow
   }
@@ -51,6 +52,7 @@ export function validateAnimations(
     : [requestedNames];
 
   try {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const available = (rive as any).animationNames;
     for (const name of names) {
       if (!available || !available.includes(name)) {
@@ -64,7 +66,7 @@ export function validateAnimations(
         );
       }
     }
-  } catch (e) {
+  } catch {
     // Graceful fallback if runtime metadata is not accessible
     // Return null silently to avoid breaking validation flow
   }
@@ -86,6 +88,7 @@ export function validateStateMachines(
     : [requestedNames];
 
   try {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const available = (rive as any).stateMachineNames;
     for (const name of names) {
       if (!available || !available.includes(name)) {
@@ -99,7 +102,7 @@ export function validateStateMachines(
         );
       }
     }
-  } catch (e) {
+  } catch {
     // Graceful fallback if runtime metadata is not accessible
     // Return null silently to avoid breaking validation flow
   }
@@ -133,7 +136,7 @@ export function validateInput(
           : `No inputs found in state machine "${stateMachineName}"`,
       );
     }
-  } catch (e) {
+  } catch {
     // Graceful fallback if runtime metadata is not accessible
     // Return null silently to avoid breaking validation flow
   }

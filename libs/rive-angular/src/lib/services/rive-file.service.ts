@@ -76,6 +76,7 @@ interface PendingLoad {
 export class RiveFileService {
   private cache = new Map<string, CacheEntry>();
   private pendingLoads = new Map<string, PendingLoad>();
+  private bufferIdMap = new WeakMap<ArrayBuffer, number>();
   private bufferIdCounter = 0;
 
   // Optional debug configuration
@@ -150,9 +151,19 @@ export class RiveFileService {
   }
 
   /**
-   * Clear all cached files
+   * Clear all cached files and abort pending loads
    */
   public clearCache(): void {
+    // Clear pending loads first to prevent them from populating the cache
+    this.pendingLoads.forEach((pending) => {
+      pending.stateSignal.set({
+        riveFile: null,
+        status: 'failed',
+      });
+    });
+    this.pendingLoads.clear();
+
+    // Clean up cached files
     this.cache.forEach((entry) => {
       try {
         entry.file.cleanup();
@@ -171,15 +182,13 @@ export class RiveFileService {
       return `src:${params.src}`;
     }
     if (params.buffer) {
-      // For buffers, generate unique ID to avoid collisions
-      // Store the ID on the buffer object itself
-      const bufferWithId = params.buffer as ArrayBuffer & {
-        __riveBufferId?: number;
-      };
-      if (!bufferWithId.__riveBufferId) {
-        bufferWithId.__riveBufferId = ++this.bufferIdCounter;
+      // For buffers, use WeakMap to track unique IDs without mutating the buffer
+      let bufferId = this.bufferIdMap.get(params.buffer);
+      if (bufferId === undefined) {
+        bufferId = ++this.bufferIdCounter;
+        this.bufferIdMap.set(params.buffer, bufferId);
       }
-      return `buffer:${bufferWithId.__riveBufferId}`;
+      return `buffer:${bufferId}`;
     }
     return 'unknown';
   }
@@ -205,6 +214,7 @@ export class RiveFileService {
 
     try {
       // Extract debug parameter - it's not part of RiveFile SDK API
+      // eslint-disable-next-line @typescript-eslint/no-unused-vars
       const { debug, ...sdkParams } = params;
       const file = new RiveFile(sdkParams);
 

@@ -123,9 +123,19 @@ describe('RiveCanvasComponent', () => {
       },
     );
 
+    let loadedEmitted = false;
+    let riveReadyEmitted = false;
+
     component.loaded.subscribe(() => {
+      loadedEmitted = true;
       expect(component.isLoaded()).toBe(true);
-      done();
+      if (loadedEmitted && riveReadyEmitted) done();
+    });
+
+    component.riveReady.subscribe(() => {
+      riveReadyEmitted = true;
+      expect(component.riveInstance()).toBe(mockRive);
+      if (loadedEmitted && riveReadyEmitted) done();
     });
 
     fixture.componentRef.setInput('src', 'test.riv');
@@ -296,13 +306,30 @@ describe('RiveCanvasComponent', () => {
       }, 0);
     });
 
-    it('should expose riveInstance signal', (done) => {
+    it('should expose riveInstance signal after load', (done) => {
+      let onLoadCallback: (() => void) | undefined;
+
+      (Rive as jest.MockedClass<typeof Rive>).mockImplementation(
+        (config: any) => {
+          onLoadCallback = config.onLoad;
+          return mockRive;
+        },
+      );
+
       fixture.componentRef.setInput('src', 'test.riv');
       fixture.detectChanges();
 
+      // Before load, instance is set but not ready
       setTimeout(() => {
         expect(component.riveInstance()).toBe(mockRive);
-        done();
+        
+        // After load, riveReady should emit
+        component.riveReady.subscribe((rive) => {
+          expect(rive).toBe(mockRive);
+          done();
+        });
+
+        onLoadCallback!();
       }, 0);
     });
   });

@@ -27,7 +27,7 @@ import {
 } from '@rive-app/canvas';
 import { RiveLoadError } from '../models';
 import {
-  getElementObserver,
+  ElementObserver,
   RiveLogger,
   RIVE_DEBUG_CONFIG,
   validateConfiguration,
@@ -89,6 +89,7 @@ export class RiveCanvasComponent implements AfterViewInit {
   readonly #platformId = inject(PLATFORM_ID);
   readonly #ngZone = inject(NgZone);
   readonly #globalDebugConfig = inject(RIVE_DEBUG_CONFIG, { optional: true });
+  readonly #elementObserver = inject(ElementObserver);
 
   public readonly src = input<string>();
   public readonly buffer = input<ArrayBuffer>();
@@ -142,20 +143,27 @@ export class RiveCanvasComponent implements AfterViewInit {
    */
   public readonly riveEvent = output<RiveEvent>();
   /**
-   * Emitted when Rive instance is created and ready.
+   * Emitted when Rive instance is fully loaded and ready.
    * Provides direct access to the Rive instance for advanced use cases.
+   * Note: This fires AFTER the animation is loaded, not just instantiated.
    */
   public readonly riveReady = output<Rive>();
 
-  // Signals for reactive state
-  public readonly isPlaying = signal<boolean>(false);
-  public readonly isPaused = signal<boolean>(false);
-  public readonly isLoaded = signal<boolean>(false);
+  // Private writable signals
+  readonly #isPlaying = signal<boolean>(false);
+  readonly #isPaused = signal<boolean>(false);
+  readonly #isLoaded = signal<boolean>(false);
+  readonly #riveInstance = signal<Rive | null>(null);
+
+  // Public readonly signals
+  public readonly isPlaying = this.#isPlaying.asReadonly();
+  public readonly isPaused = this.#isPaused.asReadonly();
+  public readonly isLoaded = this.#isLoaded.asReadonly();
   /**
    * Public signal providing access to the Rive instance.
    * Use this to access advanced Rive SDK features.
    */
-  public readonly riveInstance = signal<Rive | null>(null);
+  public readonly riveInstance = this.#riveInstance.asReadonly();
 
   // Private state
   #rive: Rive | null = null;
@@ -177,11 +185,15 @@ export class RiveCanvasComponent implements AfterViewInit {
       this.logger.update(this.#globalDebugConfig, this.debugMode());
     });
 
-    // Effect to reload animation when src, buffer, or riveFile changes
+    // Effect to reload animation when src, buffer, riveFile, or configuration changes
     effect(() => {
       const src = this.src();
       const buffer = this.buffer();
       const riveFile = this.riveFile();
+      // Track configuration changes to trigger reload
+      this.artboard();
+      this.animations();
+      this.stateMachines();
       untracked(() => {
         if (
           (src || buffer || riveFile) &&
@@ -189,6 +201,18 @@ export class RiveCanvasComponent implements AfterViewInit {
           this.isInitialized
         )
           this.loadAnimation();
+      });
+    });
+
+    // Effect to update layout when fit or alignment changes
+    effect(() => {
+      const fit = this.fit();
+      const alignment = this.alignment();
+      untracked(() => {
+        if (this.#rive && isPlatformBrowser(this.#platformId)) {
+          const layoutParams: LayoutParameters = { fit, alignment };
+          this.#rive.layout = new Layout(layoutParams);
+        }
       });
     });
 
@@ -214,7 +238,6 @@ export class RiveCanvasComponent implements AfterViewInit {
    */
   private setupResizeObserver(): void {
     const canvas = this.canvas().nativeElement;
-    const dpr = window.devicePixelRatio || 1;
 
     this.resizeObserver = new ResizeObserver((entries) => {
       // Cancel any pending resize frame
@@ -235,6 +258,9 @@ export class RiveCanvasComponent implements AfterViewInit {
 
         // Defer resize to next animation frame to prevent excessive updates in Safari
         this.resizeRafId = requestAnimationFrame(() => {
+          // Read current DPR to support monitor changes and zoom
+          const dpr = window.devicePixelRatio || 1;
+          
           // Set canvas size with device pixel ratio for sharp rendering
           canvas.width = width * dpr;
           canvas.height = height * dpr;
@@ -269,7 +295,6 @@ export class RiveCanvasComponent implements AfterViewInit {
     if (!this.shouldUseIntersectionObserver()) return;
 
     const canvas = this.canvas().nativeElement;
-    const observer = getElementObserver();
 
     const onIntersectionChange = (entry: IntersectionObserverEntry): void => {
       if (entry.isIntersecting) {
@@ -299,7 +324,7 @@ export class RiveCanvasComponent implements AfterViewInit {
       }
     };
 
-    observer.registerCallback(canvas, onIntersectionChange);
+    this.#elementObserver.registerCallback(canvas, onIntersectionChange);
   }
 
   /**
@@ -337,8 +362,7 @@ export class RiveCanvasComponent implements AfterViewInit {
 
     if (this.shouldUseIntersectionObserver()) {
       const canvas = this.canvas().nativeElement;
-      const observer = getElementObserver();
-      observer.removeCallback(canvas);
+      this.#elementObserver.removeCallback(canvas);
     }
   }
 
@@ -385,9 +409,8 @@ export class RiveCanvasComponent implements AfterViewInit {
           alignment: this.alignment(),
         };
 
-        // Create Rive instance configuration
-        // Using Record to allow dynamic property assignment
-        const config: Record<string, unknown> = {
+        // Build typed Rive configuration
+        const baseConfig = {
           canvas,
           autoplay: this.autoplay(),
           layout: new Layout(layoutParams),
@@ -403,38 +426,35 @@ export class RiveCanvasComponent implements AfterViewInit {
           onRiveEvent: (event: RiveEvent) => this.onRiveEvent(event),
         };
 
-        // Add src, buffer, or riveFile (priority: riveFile > src > buffer)
-        if (riveFile) {
-          config['riveFile'] = riveFile;
-        } else if (src) {
-          config['src'] = src;
-        } else if (buffer) {
-          config['buffer'] = buffer;
-        }
+        // Add source (priority: riveFile > src > buffer)
+        const sourceConfig = riveFile
+          ? { riveFile }
+          : src
+            ? { src }
+            : buffer
+              ? { buffer }
+              : {};
 
-        // Add artboard if specified
-        const artboard = this.artboard();
-        if (artboard) config['artboard'] = artboard;
+        // Add optional configuration
+        const optionalConfig = {
+          ...(this.artboard() ? { artboard: this.artboard() } : {}),
+          ...(this.animations() ? { animations: this.animations() } : {}),
+          ...(this.stateMachines()
+            ? { stateMachines: this.stateMachines() }
+            : {}),
+        };
 
-        // Add animations if specified
-        const animations = this.animations();
-        if (animations) config['animations'] = animations;
+        // Combine all configurations
+        const config = { ...baseConfig, ...sourceConfig, ...optionalConfig };
 
-        // Add state machines if specified
-        const stateMachines = this.stateMachines();
-        if (stateMachines) config['stateMachines'] = stateMachines;
+        this.#rive = new Rive(config);
 
-        // Safe type assertion - config contains all required properties
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        this.#rive = new Rive(config as any);
-
-        // Update public signal and emit riveReady event
+        // Update public signal (riveReady will be emitted in onLoad)
         this.#ngZone.run(() => {
-          this.riveInstance.set(this.#rive);
-          this.riveReady.emit(this.#rive!);
+          this.#riveInstance.set(this.#rive);
         });
       } catch (error) {
-        console.error('Failed to initialize Rive instance:', error);
+        this.logger.error('Failed to initialize Rive instance:', error);
         this.#ngZone.run(() =>
           this.loadError.emit(
             new RiveLoadError({
@@ -471,6 +491,7 @@ export class RiveCanvasComponent implements AfterViewInit {
 
       // Log available assets in debug mode
       // Note: These properties exist at runtime but may not be in type definitions
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
       const riveWithMetadata = this.#rive as any;
       this.logger.debug('Animation loaded successfully. Available assets:', {
         artboards: riveWithMetadata.artboardNames,
@@ -480,8 +501,12 @@ export class RiveCanvasComponent implements AfterViewInit {
     }
 
     this.#ngZone.run(() => {
-      this.isLoaded.set(true);
+      this.#isLoaded.set(true);
       this.loaded.emit();
+      // Emit riveReady after animation is fully loaded
+      if (this.#rive) {
+        this.riveReady.emit(this.#rive);
+      }
     });
   }
 
@@ -514,22 +539,22 @@ export class RiveCanvasComponent implements AfterViewInit {
 
   private onPlay(): void {
     this.#ngZone.run(() => {
-      this.isPlaying.set(true);
-      this.isPaused.set(false);
+      this.#isPlaying.set(true);
+      this.#isPaused.set(false);
     });
   }
 
   private onPause(): void {
     this.#ngZone.run(() => {
-      this.isPlaying.set(false);
-      this.isPaused.set(true);
+      this.#isPlaying.set(false);
+      this.#isPaused.set(true);
     });
   }
 
   private onStop(): void {
     this.#ngZone.run(() => {
-      this.isPlaying.set(false);
-      this.isPaused.set(false);
+      this.#isPlaying.set(false);
+      this.#isPaused.set(false);
     });
   }
 
@@ -661,15 +686,15 @@ export class RiveCanvasComponent implements AfterViewInit {
       try {
         this.#rive.cleanup();
       } catch (error) {
-        console.warn('Error during Rive cleanup:', error);
+        this.logger.warn('Error during Rive cleanup:', error);
       }
       this.#rive = null;
     }
 
     // Reset signals
-    this.riveInstance.set(null);
-    this.isLoaded.set(false);
-    this.isPlaying.set(false);
-    this.isPaused.set(false);
+    this.#riveInstance.set(null);
+    this.#isLoaded.set(false);
+    this.#isPlaying.set(false);
+    this.#isPaused.set(false);
   }
 }

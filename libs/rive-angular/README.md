@@ -142,6 +142,55 @@ export class InteractiveComponent {
 }
 ```
 
+### Text Runs
+
+Rive text runs allow you to update text content at runtime. The library provides two approaches:
+
+#### Declarative (Controlled Keys)
+
+Use the `textRuns` input for reactive, template-driven text updates:
+
+```html
+<rive-canvas
+  src="assets/hello.riv"
+  [textRuns]="{ greeting: userName(), subtitle: 'Welcome' }"
+/>
+```
+
+Keys present in `textRuns` are **controlled** — the input is the source of truth and will override any imperative changes.
+
+#### Imperative (Uncontrolled Keys)
+
+Use methods for reading values or managing keys not in `textRuns`:
+
+```typescript
+riveRef = viewChild.required(RiveCanvasComponent);
+
+// Read current value
+const greeting = this.riveRef().getTextRunValue('greeting');
+
+// Set uncontrolled key
+this.riveRef().setTextRunValue('dynamicText', 'New value');
+```
+
+#### Nested Text Runs
+
+For text runs inside nested components, use the `AtPath` variants:
+
+```typescript
+this.riveRef().setTextRunValueAtPath(
+  'button_text',
+  'Click Me',
+  'NestedArtboard/ButtonComponent'
+);
+```
+
+#### Controlled vs Uncontrolled
+
+- **Controlled**: Keys in `textRuns` input — managed by Angular, input is source of truth
+- **Uncontrolled**: Keys not in `textRuns` — managed imperatively via methods
+- **Warning**: Calling `setTextRunValue()` on a controlled key logs a warning and the change will be overwritten on next input update
+
 ### Preloading files with RiveFileService
 
 For better performance, you can preload and cache .riv files:
@@ -252,6 +301,7 @@ In this case, `onError` receives a `RiveValidationError` with code `RIVE_201`, a
 | `RIVE_202` | Validation | Animation not found |
 | `RIVE_203` | Validation | State machine not found |
 | `RIVE_204` | Validation | Input/Trigger not found in State Machine |
+| `RIVE_205` | Validation | Text run not found |
 | `RIVE_301` | Config | No animation source provided |
 | `RIVE_302` | Config | Invalid canvas element |
 
@@ -277,6 +327,7 @@ In this case, `onError` receives a `RiveValidationError` with code `RIVE_201`, a
 | `shouldDisableRiveListeners` | `boolean` | `false` | Disable Rive event listeners |
 | `automaticallyHandleEvents` | `boolean` | `false` | Auto-handle Rive events (e.g., OpenUrlEvent) |
 | `debugMode` | `boolean` | `undefined` | Enable verbose logging for this instance |
+| `textRuns` | `Record<string, string>` | - | Declarative text run values. Keys present are controlled by input. |
 
 #### Outputs
 
@@ -311,6 +362,10 @@ All signals are **readonly** and cannot be mutated externally. Use the public me
 | `reset()` | Reset animation to beginning |
 | `setInput(stateMachine: string, input: string, value: number \| boolean)` | Set state machine input value |
 | `fireTrigger(stateMachine: string, trigger: string)` | Fire state machine trigger |
+| `getTextRunValue(name: string): string \| undefined` | Get text run value |
+| `setTextRunValue(name: string, value: string)` | Set text run value (warns if key is controlled) |
+| `getTextRunValueAtPath(name: string, path: string): string \| undefined` | Get nested text run value |
+| `setTextRunValueAtPath(name: string, value: string, path: string)` | Set nested text run |
 
 ### RiveFileService
 

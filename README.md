@@ -40,6 +40,7 @@ import { RiveCanvasComponent, Fit, Alignment } from '@grandgular/rive-angular';
     <rive-canvas
       src="assets/animation.riv"
       [stateMachines]="'StateMachine'"
+      [textRuns]="{ title: 'Hello Angular!' }"
       [fit]="Fit.Cover"
       [debugMode]="true"
     />

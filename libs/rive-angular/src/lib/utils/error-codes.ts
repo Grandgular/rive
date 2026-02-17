@@ -17,6 +17,7 @@ export enum RiveErrorCode {
   AnimationNotFound = 'RIVE_202',
   StateMachineNotFound = 'RIVE_203',
   InputNotFound = 'RIVE_204',
+  TextRunNotFound = 'RIVE_205',
 
   // Configuration Errors
   NoSource = 'RIVE_301',
@@ -35,6 +36,7 @@ export const ERROR_MESSAGES: Record<RiveErrorCode, string> = {
   [RiveErrorCode.AnimationNotFound]: 'Animation "{name}" not found',
   [RiveErrorCode.StateMachineNotFound]: 'State machine "{name}" not found',
   [RiveErrorCode.InputNotFound]: 'Input "{name}" not found in "{stateMachine}"',
+  [RiveErrorCode.TextRunNotFound]: 'Text run "{name}" not found',
   [RiveErrorCode.NoSource]: 'No animation source provided',
   [RiveErrorCode.InvalidCanvas]: 'Invalid canvas element',
 };

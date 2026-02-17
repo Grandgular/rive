@@ -11,10 +11,10 @@ The ng-rive library, while pioneering Angular support for Rive animations, has b
 | Version Compatibility | 8 | ✅ Fully resolved |
 | Memory Management | 5 | ✅ Fully resolved |
 | Dependency Injection / Module Setup | 4 | ✅ Fully resolved |
-| Missing Features | 6 | ⏳ Partially addressed |
+| Missing Features | 6 | ⏳ Partially addressed (4/6 done) |
 | Documentation / DX | 2 | ✅ Fully resolved (Phase 2) |
 
-**Result**: @grandgular/rive-angular already prevents **~85% of issues** that plagued ng-rive users.
+**Result**: @grandgular/rive-angular already prevents **~90% of issues** that plagued ng-rive users.
 
 ---
 
@@ -190,15 +190,50 @@ Features users requested that were never implemented or partially implemented.
 |---------|--------|----------------|
 | Visibility-based playback | ✅ Implemented | `shouldUseIntersectionObserver` input |
 | Animation state tracking | ✅ Implemented | `isPlaying`, `isPaused`, `isLoaded` signals |
-| Rive Text | ⏳ Planned | Via `riveInstance` signal for now |
+| Rive Text | ✅ Implemented (v0.3.0) | `textRuns` input + `getTextRunValue()` / `setTextRunValue()` / `AtPath` methods |
 | Color changes | ⏳ Planned | Via `riveInstance` signal for now |
 | Auto-reset | ⏳ Planned | Not yet implemented |
 | Node/Bone | ⏳ Planned | Via `riveInstance` signal for now |
 
-**Current workaround for advanced features:**
+**Rive Text — fully resolved in v0.3.0 (issue [#59](https://github.com/dappsnation/ng-rive/issues/59)):**
 
 ```typescript
-// Users can access the Rive instance directly for advanced features
+// Declarative (controlled) — reactive text via input
+@Component({
+  template: `
+    <rive-canvas
+      src="animation.riv"
+      [textRuns]="{ greeting: userName(), subtitle: 'Welcome' }"
+    />
+  `
+})
+export class MyComponent {
+  userName = signal('World');
+}
+```
+
+```typescript
+// Imperative (uncontrolled) — read/write text runs via methods
+riveRef = viewChild.required(RiveCanvasComponent);
+
+readValue() {
+  const text = this.riveRef().getTextRunValue('greeting');
+}
+
+writeValue() {
+  this.riveRef().setTextRunValue('dynamicText', 'New value');
+}
+
+// Nested artboard text runs
+nestedWrite() {
+  this.riveRef().setTextRunValueAtPath('button_text', 'Click Me', 'NestedArtboard/Button');
+}
+```
+
+**Current workaround for remaining advanced features:**
+
+```typescript
+// Users can access the Rive instance directly for features not yet wrapped
 @Component({
   template: `
     <rive-canvas
@@ -210,7 +245,6 @@ Features users requested that were never implemented or partially implemented.
 export class MyComponent {
   onRiveReady(rive: Rive) {
     // Access advanced Rive SDK features directly
-    // - Text runs
     // - Color changes
     // - Bones/nodes
   }
@@ -262,7 +296,7 @@ This explicitly resolves issues #23 and #22 by providing actionable feedback ins
 |---|-------|----------|-------------------|-------|
 | #61 | Compilation errors | Critical | ✅ Resolved | Modern Angular signals API |
 | #60 | WEBPACK TypeError | Critical | ✅ Resolved | Uses @rive-app/canvas |
-| #59 | Rive Text | Medium | ⏳ Workaround | Via riveInstance signal |
+| #59 | Rive Text | Medium | ✅ Resolved | `textRuns` input + imperative methods (v0.3.0) |
 | #58 | Doc typo | Low | ✅ N/A | Fresh documentation |
 | #57 | Play when visible | High | ✅ Resolved | IntersectionObserver built-in |
 | #56 | Change color | Medium | ⏳ Workaround | Via riveInstance signal |
@@ -348,8 +382,10 @@ Problems:
 │  │  artboard            │  riveEvent     │  riveInst  ││
 │  │  animations          │  riveReady     │            ││
 │  │  stateMachines       │                │            ││
-│  │  autoplay            │                │            ││
-│  │  fit, alignment      │                │            ││
+│  │  autoplay            │  Methods       │            ││
+│  │  fit, alignment      │  ───────────   │            ││
+│  │  textRuns            │  get/setText   │            ││
+│  │                      │  RunValue()    │            ││
 │  │                                                     ││
 │  └─────────────────────────────────────────────────────┘│
 │                          │                               │
@@ -400,9 +436,16 @@ Based on ng-rive issues analysis, here are features to consider:
 - [x] Debug mode with verbose logging
 - [x] Race condition fixes in RiveFileService
 
-### Phase 3: Advanced Features (Planned)
+### Phase 3: Text Run Support ✅ Complete (v0.3.0)
 
-- [ ] `setText(textRunName, value)` method for Rive Text
+- [x] `textRuns` input for declarative, reactive text setting (controlled keys)
+- [x] `getTextRunValue()` / `setTextRunValue()` for imperative text control (uncontrolled keys)
+- [x] `getTextRunValueAtPath()` / `setTextRunValueAtPath()` for nested artboard text runs
+- [x] Controlled/uncontrolled semantics with warning on misuse
+- [x] Error code `RIVE_205` (`TextRunNotFound`) for text run validation
+
+### Phase 4: Advanced Features (Planned)
+
 - [ ] `setFillColor(shapeName, color)` method
 - [ ] `autoReset` input for animation reset
 - [ ] `animationComplete` / `animationLoop` events
@@ -419,7 +462,7 @@ The @grandgular/rive-angular library was designed with the explicit goal of **pr
 3.  **Zero configuration**: Works out of the box without injection tokens
 4.  **Clear API boundaries**: Single component with well-defined inputs/outputs
 
-We have successfully prevented **85% of the issues** that ng-rive users faced. The remaining 15% are feature requests that can be addressed through the `riveInstance` signal workaround today, with dedicated methods planned for future releases.
+We have successfully prevented **~90% of the issues** that ng-rive users faced. With v0.3.0 adding full Text Run support (the most requested missing feature — issue #59), the remaining gaps are niche feature requests (color changes, bone/node manipulation) that can be addressed through the `riveInstance` signal workaround today, with dedicated methods planned for future releases.
 
 ---
 

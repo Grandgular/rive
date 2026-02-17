@@ -2,6 +2,17 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.3.0] - 2026-02-17
+
+### Added
+
+- **Text Run Support**: Read and update Rive text runs at runtime.
+  - `textRuns` input for declarative, reactive text setting from templates (controlled keys).
+  - `getTextRunValue()` / `setTextRunValue()` methods for imperative control (uncontrolled keys).
+  - `getTextRunValueAtPath()` / `setTextRunValueAtPath()` for nested text runs in components.
+  - Controlled/uncontrolled semantics: keys in `textRuns` input are controlled by the input (source of truth), keys outside are managed imperatively.
+- **Error Code**: `RIVE_205` (`TextRunNotFound`) for text run validation errors.
+
 ## [0.2.0] - 2026-02-16
 
 ### Added

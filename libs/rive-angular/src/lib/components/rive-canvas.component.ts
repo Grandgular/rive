@@ -33,7 +33,9 @@ import {
   validateConfiguration,
   validateInput,
   RiveErrorCode,
+  formatErrorMessage,
 } from '../utils';
+import { RiveValidationError } from '../models';
 
 /**
  * Standalone Angular component for Rive animations
@@ -129,6 +131,14 @@ export class RiveCanvasComponent implements AfterViewInit {
    */
   public readonly debugMode = input<boolean>();
 
+  /**
+   * Record of text run names to values for declarative text setting.
+   * Keys present in this input are CONTROLLED — the input is the source of truth.
+   * Keys absent from this input are UNCONTROLLED — managed imperatively.
+   * Values are applied reactively when input changes.
+   */
+  public readonly textRuns = input<Record<string, string>>();
+
   // Outputs (Events)
   public readonly loaded = output<void>();
   public readonly loadError = output<Error>();
@@ -216,6 +226,17 @@ export class RiveCanvasComponent implements AfterViewInit {
       });
     });
 
+    // Effect to apply text runs when input changes or animation loads
+    effect(() => {
+      const runs = this.textRuns();
+      const isLoaded = this.#isLoaded();
+      untracked(() => {
+        if (runs && isLoaded && this.#rive) {
+          this.applyTextRuns(runs);
+        }
+      });
+    });
+
     // Auto cleanup on destroy
     this.#destroyRef.onDestroy(() => {
       this.cleanupRive();
@@ -260,7 +281,7 @@ export class RiveCanvasComponent implements AfterViewInit {
         this.resizeRafId = requestAnimationFrame(() => {
           // Read current DPR to support monitor changes and zoom
           const dpr = window.devicePixelRatio || 1;
-          
+
           // Set canvas size with device pixel ratio for sharp rendering
           canvas.width = width * dpr;
           canvas.height = height * dpr;
@@ -674,6 +695,143 @@ export class RiveCanvasComponent implements AfterViewInit {
 
       if (input && 'fire' in input && typeof input.fire === 'function') {
         input.fire();
+      }
+    });
+  }
+
+  /**
+   * Get the current value of a text run.
+   * Returns undefined if the text run doesn't exist or Rive instance is not loaded.
+   */
+  public getTextRunValue(textRunName: string): string | undefined {
+    if (!this.#rive) return undefined;
+
+    try {
+      return this.#ngZone.runOutsideAngular(() => {
+        return this.#rive!.getTextRunValue(textRunName);
+      });
+    } catch (error) {
+      this.logger.warn(`Failed to get text run "${textRunName}":`, error);
+      return undefined;
+    }
+  }
+
+  /**
+   * Set a text run value.
+   * Warning: If the text run is controlled by textRuns input, this change will be overwritten
+   * on the next input update.
+   */
+  public setTextRunValue(textRunName: string, textRunValue: string): void {
+    if (!this.#rive) return;
+
+    // Check if this key is controlled by textRuns input
+    const controlledRuns = this.textRuns();
+    if (controlledRuns && textRunName in controlledRuns) {
+      this.logger.warn(
+        `Text run "${textRunName}" is controlled by textRuns input. This change will be overwritten on next input update.`,
+      );
+    }
+
+    this.#ngZone.runOutsideAngular(() => {
+      try {
+        this.#rive!.setTextRunValue(textRunName, textRunValue);
+        this.logger.debug(`Text run "${textRunName}" set to "${textRunValue}"`);
+      } catch (error) {
+        this.logger.warn(`Failed to set text run "${textRunName}":`, error);
+        this.#ngZone.run(() =>
+          this.loadError.emit(
+            new RiveValidationError(
+              formatErrorMessage(RiveErrorCode.TextRunNotFound, {
+                name: textRunName,
+              }),
+              RiveErrorCode.TextRunNotFound,
+            ),
+          ),
+        );
+      }
+    });
+  }
+
+  /**
+   * Get the current value of a text run at a specific path (for nested artboards/components).
+   * Returns undefined if the text run doesn't exist or Rive instance is not loaded.
+   */
+  public getTextRunValueAtPath(
+    textRunName: string,
+    path: string,
+  ): string | undefined {
+    if (!this.#rive) return undefined;
+
+    try {
+      return this.#ngZone.runOutsideAngular(() => {
+        return this.#rive!.getTextRunValueAtPath(textRunName, path);
+      });
+    } catch (error) {
+      this.logger.warn(
+        `Failed to get text run "${textRunName}" at path "${path}":`,
+        error,
+      );
+      return undefined;
+    }
+  }
+
+  /**
+   * Set a text run value at a specific path (for nested artboards/components).
+   * Note: AtPath text runs are always uncontrolled (not managed by textRuns input).
+   */
+  public setTextRunValueAtPath(
+    textRunName: string,
+    textRunValue: string,
+    path: string,
+  ): void {
+    if (!this.#rive) return;
+
+    this.#ngZone.runOutsideAngular(() => {
+      try {
+        this.#rive!.setTextRunValueAtPath(textRunName, textRunValue, path);
+        this.logger.debug(
+          `Text run "${textRunName}" at path "${path}" set to "${textRunValue}"`,
+        );
+      } catch (error) {
+        this.logger.warn(
+          `Failed to set text run "${textRunName}" at path "${path}":`,
+          error,
+        );
+        this.#ngZone.run(() =>
+          this.loadError.emit(
+            new RiveValidationError(
+              formatErrorMessage(RiveErrorCode.TextRunNotFound, {
+                name: textRunName,
+              }),
+              RiveErrorCode.TextRunNotFound,
+            ),
+          ),
+        );
+      }
+    });
+  }
+
+  /**
+   * Apply all text runs from input (controlled keys).
+   * Called on every input change or load.
+   */
+  private applyTextRuns(runs: Record<string, string>): void {
+    this.#ngZone.runOutsideAngular(() => {
+      for (const [name, value] of Object.entries(runs)) {
+        try {
+          this.#rive!.setTextRunValue(name, value);
+          this.logger.debug(`Text run "${name}" set to "${value}"`);
+        } catch (error) {
+          this.logger.warn(`Failed to set text run "${name}":`, error);
+          this.#ngZone.run(() =>
+            this.loadError.emit(
+              new RiveValidationError(
+                formatErrorMessage(RiveErrorCode.TextRunNotFound, { name }),
+                RiveErrorCode.TextRunNotFound,
+              ),
+            ),
+          );
+        }
       }
     });
   }

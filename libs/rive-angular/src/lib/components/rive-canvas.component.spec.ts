@@ -68,6 +68,8 @@ describe('RiveCanvasComponent', () => {
       startRendering: jest.fn(),
       stopRendering: jest.fn(),
       stateMachineInputs: jest.fn(() => []),
+      setTextRunValue: jest.fn(),
+      setTextRunValueAtPath: jest.fn(),
       artboardNames: [],
       animationNames: [],
       stateMachineNames: [],
@@ -627,6 +629,387 @@ describe('RiveCanvasComponent', () => {
         expect(component.isLoaded()).toBe(true);
         done();
       }, 0);
+    });
+  });
+
+  describe('Text Runs', () => {
+    beforeEach(() => {
+      mockRive.getTextRunValue = jest.fn((name: string) => `value-${name}`);
+      mockRive.setTextRunValue = jest.fn((textRunName: string, textRunValue: string) => {});
+      mockRive.getTextRunValueAtPath = jest.fn(
+        (name: string, path: string) => `value-${name}-${path}`,
+      );
+      mockRive.setTextRunValueAtPath = jest.fn((textRunName: string, textRunValue: string, path: string) => {});
+    });
+
+    describe('textRuns input (controlled keys)', () => {
+      it('should apply text runs after load', (done) => {
+        let onLoadCallback: (() => void) | undefined;
+
+        (Rive as jest.MockedClass<typeof Rive>).mockImplementation(
+          (config: any) => {
+            onLoadCallback = config.onLoad;
+            return mockRive;
+          },
+        );
+
+        fixture.componentRef.setInput('src', 'test.riv');
+        fixture.componentRef.setInput('textRuns', {
+          title: 'Hello',
+          subtitle: 'World',
+        });
+        fixture.detectChanges();
+
+        onLoadCallback!();
+
+        setTimeout(() => {
+          expect(mockRive.setTextRunValue).toHaveBeenCalledWith(
+            'title',
+            'Hello',
+          );
+          expect(mockRive.setTextRunValue).toHaveBeenCalledWith(
+            'subtitle',
+            'World',
+          );
+          done();
+        }, 0);
+      });
+
+      it('should reactively update when textRuns values change', (done) => {
+        let onLoadCallback: (() => void) | undefined;
+
+        (Rive as jest.MockedClass<typeof Rive>).mockImplementation(
+          (config: any) => {
+            onLoadCallback = config.onLoad;
+            return mockRive;
+          },
+        );
+
+        fixture.componentRef.setInput('src', 'test.riv');
+        fixture.componentRef.setInput('textRuns', { title: 'Hello' });
+        fixture.detectChanges();
+
+        onLoadCallback!();
+
+        setTimeout(() => {
+          expect(mockRive.setTextRunValue).toHaveBeenCalledWith(
+            'title',
+            'Hello',
+          );
+
+          // Clear mock and update input
+          jest.clearAllMocks();
+          fixture.componentRef.setInput('textRuns', { title: 'Updated' });
+          fixture.detectChanges();
+
+          setTimeout(() => {
+            expect(mockRive.setTextRunValue).toHaveBeenCalledWith(
+              'title',
+              'Updated',
+            );
+            done();
+          }, 0);
+        }, 0);
+      });
+
+      it('should emit error for non-existent text run', (done) => {
+        let onLoadCallback: (() => void) | undefined;
+
+        mockRive.setTextRunValue = jest.fn((textRunName: string, textRunValue: string) => {
+          throw new Error('Text run not found');
+        });
+
+        (Rive as jest.MockedClass<typeof Rive>).mockImplementation(
+          (config: any) => {
+            onLoadCallback = config.onLoad;
+            return mockRive;
+          },
+        );
+
+        const errors: Error[] = [];
+        component.loadError.subscribe((error) => {
+          errors.push(error);
+        });
+
+        fixture.componentRef.setInput('src', 'test.riv');
+        fixture.componentRef.setInput('textRuns', { invalid: 'value' });
+        fixture.detectChanges();
+
+        onLoadCallback!();
+
+        setTimeout(() => {
+          const validationError = errors.find(
+            (e) => e.name === 'RiveValidationError',
+          );
+          expect(validationError).toBeDefined();
+          done();
+        }, 0);
+      });
+
+      it('should make key uncontrolled when removed from input', (done) => {
+        let onLoadCallback: (() => void) | undefined;
+
+        (Rive as jest.MockedClass<typeof Rive>).mockImplementation(
+          (config: any) => {
+            onLoadCallback = config.onLoad;
+            return mockRive;
+          },
+        );
+
+        fixture.componentRef.setInput('src', 'test.riv');
+        fixture.componentRef.setInput('textRuns', {
+          title: 'Hello',
+          subtitle: 'World',
+        });
+        fixture.detectChanges();
+
+        onLoadCallback!();
+
+        setTimeout(() => {
+          expect(mockRive.setTextRunValue).toHaveBeenCalledWith(
+            'title',
+            'Hello',
+          );
+          expect(mockRive.setTextRunValue).toHaveBeenCalledWith(
+            'subtitle',
+            'World',
+          );
+
+          // Remove subtitle from input
+          jest.clearAllMocks();
+          fixture.componentRef.setInput('textRuns', { title: 'Hello' });
+          fixture.detectChanges();
+
+          setTimeout(() => {
+            // Only title should be set now
+            expect(mockRive.setTextRunValue).toHaveBeenCalledWith(
+              'title',
+              'Hello',
+            );
+            expect(mockRive.setTextRunValue).not.toHaveBeenCalledWith(
+              'subtitle',
+              expect.anything(),
+            );
+            done();
+          }, 0);
+        }, 0);
+      });
+    });
+
+    describe('Imperative methods', () => {
+      beforeEach(() => {
+        fixture.componentRef.setInput('src', 'test.riv');
+        fixture.detectChanges();
+      });
+
+      it('should get text run value', () => {
+        const value = component.getTextRunValue('greeting');
+        expect(mockRive.getTextRunValue).toHaveBeenCalledWith('greeting');
+        expect(value).toBe('value-greeting');
+      });
+
+      it('should return undefined when getting text run value with no rive instance', () => {
+        fixture.destroy();
+        const value = component.getTextRunValue('greeting');
+        expect(value).toBeUndefined();
+      });
+
+      it('should set text run value on uncontrolled key', () => {
+        component.setTextRunValue('dynamicText', 'New value');
+        expect(mockRive.setTextRunValue).toHaveBeenCalledWith(
+          'dynamicText',
+          'New value',
+        );
+      });
+
+      it('should no-op when setting text run value with no rive instance', () => {
+        fixture.destroy();
+        component.setTextRunValue('greeting', 'Hello');
+        // Should not throw
+      });
+
+      it('should get text run value at path', () => {
+        const value = component.getTextRunValueAtPath(
+          'button_text',
+          'Nested/Button',
+        );
+        expect(mockRive.getTextRunValueAtPath).toHaveBeenCalledWith(
+          'button_text',
+          'Nested/Button',
+        );
+        expect(value).toBe('value-button_text-Nested/Button');
+      });
+
+      it('should set text run value at path', () => {
+        component.setTextRunValueAtPath(
+          'button_text',
+          'Click Me',
+          'Nested/Button',
+        );
+        expect(mockRive.setTextRunValueAtPath).toHaveBeenCalledWith(
+          'button_text',
+          'Click Me',
+          'Nested/Button',
+        );
+      });
+    });
+
+    describe('Controlled vs Uncontrolled scenarios', () => {
+      let onLoadCallback: (() => void) | undefined;
+
+      beforeEach(() => {
+        (Rive as jest.MockedClass<typeof Rive>).mockImplementation(
+          (config: any) => {
+            onLoadCallback = config.onLoad;
+            return mockRive;
+          },
+        );
+      });
+
+      it('scenario 1: controlled key + imperative call -> input wins', (done) => {
+        fixture.componentRef.setInput('src', 'test.riv');
+        fixture.componentRef.setInput('textRuns', { title: 'Hello' });
+        fixture.detectChanges();
+
+        onLoadCallback!();
+
+        setTimeout(() => {
+          expect(mockRive.setTextRunValue).toHaveBeenCalledWith(
+            'title',
+            'Hello',
+          );
+
+          // Imperative call on controlled key
+          jest.clearAllMocks();
+          component.setTextRunValue('title', 'World');
+
+          setTimeout(() => {
+            expect(mockRive.setTextRunValue).toHaveBeenCalledWith(
+              'title',
+              'World',
+            );
+
+            // Input updates with same value - should reapply
+            jest.clearAllMocks();
+            fixture.componentRef.setInput('textRuns', { title: 'Hello' });
+            fixture.detectChanges();
+
+            setTimeout(() => {
+              expect(mockRive.setTextRunValue).toHaveBeenCalledWith(
+                'title',
+                'Hello',
+              );
+              done();
+            }, 0);
+          }, 0);
+        }, 0);
+      });
+
+      it('scenario 2: controlled key changes value', (done) => {
+        fixture.componentRef.setInput('src', 'test.riv');
+        fixture.componentRef.setInput('textRuns', { title: 'Hello' });
+        fixture.detectChanges();
+
+        onLoadCallback!();
+
+        setTimeout(() => {
+          expect(mockRive.setTextRunValue).toHaveBeenCalledWith(
+            'title',
+            'Hello',
+          );
+
+          // Input changes
+          jest.clearAllMocks();
+          fixture.componentRef.setInput('textRuns', { title: 'Updated' });
+          fixture.detectChanges();
+
+          setTimeout(() => {
+            expect(mockRive.setTextRunValue).toHaveBeenCalledWith(
+              'title',
+              'Updated',
+            );
+            done();
+          }, 0);
+        }, 0);
+      });
+
+      it('scenario 3: uncontrolled key + imperative call -> both preserved', (done) => {
+        fixture.componentRef.setInput('src', 'test.riv');
+        fixture.componentRef.setInput('textRuns', { title: 'Hello' });
+        fixture.detectChanges();
+
+        onLoadCallback!();
+
+        setTimeout(() => {
+          expect(mockRive.setTextRunValue).toHaveBeenCalledWith(
+            'title',
+            'Hello',
+          );
+
+          // Imperative call on uncontrolled key
+          jest.clearAllMocks();
+          component.setTextRunValue('subtitle', 'World');
+
+          setTimeout(() => {
+            expect(mockRive.setTextRunValue).toHaveBeenCalledWith(
+              'subtitle',
+              'World',
+            );
+
+            // Input updates - should only set controlled key
+            jest.clearAllMocks();
+            fixture.componentRef.setInput('textRuns', { title: 'Hello' });
+            fixture.detectChanges();
+
+            setTimeout(() => {
+              expect(mockRive.setTextRunValue).toHaveBeenCalledWith(
+                'title',
+                'Hello',
+              );
+              expect(mockRive.setTextRunValue).not.toHaveBeenCalledWith(
+                'subtitle',
+                expect.anything(),
+              );
+              done();
+            }, 0);
+          }, 0);
+        }, 0);
+      });
+    });
+
+    describe('Warning logging', () => {
+      it('should log warning when setting controlled key imperatively', (done) => {
+        let onLoadCallback: (() => void) | undefined;
+
+        (Rive as jest.MockedClass<typeof Rive>).mockImplementation(
+          (config: any) => {
+            onLoadCallback = config.onLoad;
+            return mockRive;
+          },
+        );
+
+        const warnSpy = jest.spyOn(console, 'warn').mockImplementation();
+
+        fixture.componentRef.setInput('src', 'test.riv');
+        fixture.componentRef.setInput('textRuns', { title: 'Hello' });
+        fixture.componentRef.setInput('debugMode', true); // Enable debug logging to see warnings
+        fixture.detectChanges();
+
+        onLoadCallback!();
+
+        // Wait for the component to be fully loaded
+        setTimeout(() => {
+          // Call setTextRunValue - this should log a warning immediately
+          component.setTextRunValue('title', 'World');
+
+          // Verify the warning was logged
+          expect(warnSpy).toHaveBeenCalledWith(
+            expect.stringContaining('controlled by textRuns input'),
+          );
+          warnSpy.mockRestore();
+          done();
+        }, 0);
+      });
     });
   });
 });

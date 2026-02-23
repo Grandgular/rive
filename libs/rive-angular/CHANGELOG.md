@@ -2,6 +2,95 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.4.0] - 2026-02-23
+
+### Added
+
+- **Data Binding (ViewModel) Support**: Full integration with Rive's ViewModel system for dynamic data binding.
+  - `viewModelName` input to select which ViewModel to use (defaults to artboard's default ViewModel). Changing this input after load automatically reinitializes the ViewModel.
+  - `dataBindings` input for declarative, reactive data binding from templates (controlled keys).
+  - `dataBindingChange` output for two-way reactivity — emits when ViewModel properties change from within the animation, including trigger events (with `value: true`).
+  - `viewModelInstance` signal for advanced ViewModel access.
+  - Auto-detect property types: automatically determines if a property is color, number, string, boolean, enum, or trigger.
+  - Controlled/uncontrolled semantics: keys in `dataBindings` input are controlled (source of truth), keys outside are managed imperatively.
+
+- **Universal Data Binding Methods**:
+  - `setDataBinding(path, value)` — set any ViewModel property value (auto-detects type).
+  - `getDataBinding(path)` — get any ViewModel property value (auto-detects type).
+  - `fireViewModelTrigger(path)` — fire a trigger property in the ViewModel.
+
+- **Color Manipulation Methods** (resolves [ng-rive issue #56](https://github.com/dappsnation/ng-rive/issues/56)):
+  - `setColor(path, color)` — set color using hex string (`'#RRGGBB'` or `'#RRGGBBAA'`), ARGB integer, or `RiveColor` object.
+  - `getColor(path)` — get color as `RiveColor` object.
+  - `setColorRgba(path, r, g, b, a)` — set color using RGBA components (0-255).
+  - `setColorOpacity(path, opacity)` — set opacity (0.0-1.0) while preserving RGB values.
+
+- **Color Utilities** (exported for consumer use):
+  - `parseRiveColor(input)` — parse hex string, ARGB integer, or `RiveColor` object into normalized `RiveColor`.
+  - `riveColorToArgb(color)` — convert `RiveColor` to ARGB 32-bit integer.
+  - `riveColorToHex(color)` — convert `RiveColor` to hex string (`'#RRGGBBAA'`).
+
+- **New Types**:
+  - `RiveColor` — color representation with `r`, `g`, `b`, `a` components (0-255).
+  - `DataBindingValue` — union type for all ViewModel property values.
+  - `DataBindingChangeEvent` — event emitted when ViewModel property changes.
+  - `DataBindingPropertyType` — enum of ViewModel property types.
+
+- **Error Codes**: New `RIVE_4xx` range for Data Binding validation (emitted via `loadError` output):
+  - `RIVE_401` (`ViewModelNotFound`) — specified ViewModel not found in file.
+  - `RIVE_402` (`DataBindingPropertyNotFound`) — property path not found in ViewModel (both declarative and imperative APIs).
+  - `RIVE_403` (`DataBindingTypeMismatch`) — value type doesn't match property type, invalid color format, or opacity out of range (0.0-1.0).
+
+### Changed
+
+- **ViewModel vs Direct API**: Color changes now use Rive's official ViewModel / Data Binding system instead of direct shape manipulation (which doesn't exist in Rive SDK). This provides a more robust, designer-friendly approach where ViewModels are created in the Rive editor and bound to animation elements.
+
+### Notes
+
+- **No Breaking Changes**: All new features are additive. Existing code continues to work without modification.
+- **Optional Feature**: Data Binding is only used if your `.riv` file contains ViewModels. Files without ViewModels work exactly as before.
+- **Feature Parity**: This release brings Angular library to feature parity with React's `@rive-app/react-webgl2` hooks for ViewModel support.
+
+### Examples
+
+**Declarative (Controlled) — Reactive via Input:**
+
+```typescript
+@Component({
+  template: `
+    <rive-canvas
+      src="animation.riv"
+      [dataBindings]="{
+        backgroundColor: '#FF5733',
+        score: playerScore(),
+        playerName: userName(),
+        isActive: true
+      }"
+    />
+  `
+})
+export class MyComponent {
+  playerScore = signal(42);
+  userName = signal('Alice');
+}
+```
+
+**Imperative (Uncontrolled) — Direct Method Calls:**
+
+```typescript
+riveRef = viewChild.required(RiveCanvasComponent);
+
+updateColor() {
+  this.riveRef().setColor('backgroundColor', '#00FF00');
+  this.riveRef().setColorOpacity('backgroundColor', 0.5);
+}
+
+updateData() {
+  this.riveRef().setDataBinding('score', 100);
+  this.riveRef().fireViewModelTrigger('onComplete');
+}
+```
+
 ## [0.3.0] - 2026-02-17
 
 ### Added

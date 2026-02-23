@@ -24,8 +24,15 @@ import {
   StateMachineInput,
   type LayoutParameters,
   Event as RiveEvent,
+  ViewModelInstance,
 } from '@rive-app/canvas';
 import { RiveLoadError } from '../models';
+import type {
+  DataBindingValue,
+  DataBindingChangeEvent,
+  DataBindingPropertyType,
+  RiveColor,
+} from '../models/data-binding.types';
 import {
   ElementObserver,
   RiveLogger,
@@ -34,6 +41,7 @@ import {
   validateInput,
   RiveErrorCode,
   formatErrorMessage,
+  parseRiveColor,
 } from '../utils';
 import { RiveValidationError } from '../models';
 
@@ -139,6 +147,32 @@ export class RiveCanvasComponent implements AfterViewInit {
    */
   public readonly textRuns = input<Record<string, string>>();
 
+  /**
+   * Name of the ViewModel to use for data binding.
+   * If not provided, uses the default ViewModel for the artboard.
+   * Only relevant if the .riv file contains ViewModels.
+   */
+  public readonly viewModelName = input<string>();
+
+  /**
+   * Record of ViewModel property paths to values for declarative data binding.
+   * Keys present in this input are CONTROLLED — the input is the source of truth.
+   * Keys absent from this input are UNCONTROLLED — managed imperatively.
+   * Values are applied reactively when input changes.
+   *
+   * Supports multiple data types: number, string, boolean, RiveColor.
+   * The component auto-detects the property type from the ViewModel.
+   *
+   * @example
+   * [dataBindings]="{
+   *   backgroundColor: '#FF5733',
+   *   score: 42,
+   *   playerName: 'Alice',
+   *   isActive: true
+   * }"
+   */
+  public readonly dataBindings = input<Record<string, DataBindingValue>>();
+
   // Outputs (Events)
   public readonly loaded = output<void>();
   public readonly loadError = output<Error>();
@@ -158,12 +192,19 @@ export class RiveCanvasComponent implements AfterViewInit {
    * Note: This fires AFTER the animation is loaded, not just instantiated.
    */
   public readonly riveReady = output<Rive>();
+  /**
+   * Emitted when a ViewModel property changes from within the animation.
+   * Enables two-way data binding between the animation and Angular application.
+   * Only fires if the .riv file uses ViewModels with callbacks.
+   */
+  public readonly dataBindingChange = output<DataBindingChangeEvent>();
 
   // Private writable signals
   readonly #isPlaying = signal<boolean>(false);
   readonly #isPaused = signal<boolean>(false);
   readonly #isLoaded = signal<boolean>(false);
   readonly #riveInstance = signal<Rive | null>(null);
+  readonly #viewModelInstance = signal<ViewModelInstance | null>(null);
 
   // Public readonly signals
   public readonly isPlaying = this.#isPlaying.asReadonly();
@@ -174,6 +215,12 @@ export class RiveCanvasComponent implements AfterViewInit {
    * Use this to access advanced Rive SDK features.
    */
   public readonly riveInstance = this.#riveInstance.asReadonly();
+  /**
+   * Public signal providing access to the ViewModel instance.
+   * Use this to access advanced ViewModel features for data binding.
+   * Returns null if the .riv file doesn't use ViewModels.
+   */
+  public readonly viewModelInstance = this.#viewModelInstance.asReadonly();
 
   // Private state
   #rive: Rive | null = null;
@@ -181,6 +228,8 @@ export class RiveCanvasComponent implements AfterViewInit {
   private resizeObserver: ResizeObserver | null = null;
   private isInitialized = false;
   private isPausedByIntersectionObserver = false;
+  readonly #viewModelSubscriptionDisposers = new Set<() => void>();
+  readonly #localMutationSuppressions = new Map<string, number>();
   private retestIntersectionTimeoutId: ReturnType<typeof setTimeout> | null =
     null;
   private resizeRafId: number | null = null;
@@ -233,6 +282,29 @@ export class RiveCanvasComponent implements AfterViewInit {
       untracked(() => {
         if (runs && isLoaded && this.#rive) {
           this.applyTextRuns(runs);
+        }
+      });
+    });
+
+    // Effect to apply data bindings when input changes or animation loads
+    effect(() => {
+      const bindings = this.dataBindings();
+      const isLoaded = this.#isLoaded();
+      const vmi = this.#viewModelInstance();
+      untracked(() => {
+        if (bindings && isLoaded && vmi) {
+          this.applyDataBindings(bindings);
+        }
+      });
+    });
+
+    // Effect to reinitialize ViewModel when viewModelName changes after load
+    effect(() => {
+      const viewModelName = this.viewModelName();
+      const isLoaded = this.#isLoaded();
+      untracked(() => {
+        if (isLoaded && this.#rive) {
+          this.initializeViewModel();
         }
       });
     });
@@ -519,6 +591,9 @@ export class RiveCanvasComponent implements AfterViewInit {
         animations: riveWithMetadata.animationNames,
         stateMachines: riveWithMetadata.stateMachineNames,
       });
+
+      // Initialize ViewModel if available
+      this.initializeViewModel();
     }
 
     this.#ngZone.run(() => {
@@ -811,6 +886,276 @@ export class RiveCanvasComponent implements AfterViewInit {
     });
   }
 
+  // ========================================================================
+  // Data Binding (ViewModel) Methods
+  // ========================================================================
+
+  /**
+   * Set a data binding value in the ViewModel.
+   * Auto-detects the property type and applies the value accordingly.
+   * Warning: If the property is controlled by dataBindings input, this change
+   * will be overwritten on the next input update.
+   */
+  public setDataBinding(path: string, value: DataBindingValue): void {
+    const vmi = this.#viewModelInstance();
+    if (!vmi) {
+      this.logger.warn('No ViewModel instance available');
+      return;
+    }
+
+    // Check if this key is controlled by dataBindings input
+    const controlledBindings = this.dataBindings();
+    if (controlledBindings && path in controlledBindings) {
+      this.logger.warn(
+        `Data binding "${path}" is controlled by dataBindings input. This change will be overwritten on next input update.`,
+      );
+    }
+
+    this.#ngZone.runOutsideAngular(() => {
+      this.withLocalMutation(path, () => {
+        const resolved = this.resolveViewModelProperty(vmi, path);
+        if (!resolved) {
+          this.logger.warn(`Data binding property "${path}" not found in ViewModel`);
+          this.#ngZone.run(() =>
+            this.loadError.emit(
+              new RiveValidationError(
+                formatErrorMessage(RiveErrorCode.DataBindingPropertyNotFound, {
+                  path,
+                }),
+                RiveErrorCode.DataBindingPropertyNotFound,
+              ),
+            ),
+          );
+          return;
+        }
+        this.tryApplyBinding(path, value, resolved);
+      });
+    });
+  }
+
+  /**
+   * Get a data binding value from the ViewModel.
+   * Auto-detects the property type and returns the value accordingly.
+   * Returns undefined if the property doesn't exist or ViewModel is not loaded.
+   */
+  public getDataBinding(path: string): DataBindingValue | undefined {
+    const vmi = this.#viewModelInstance();
+    if (!vmi) return undefined;
+
+    return this.#ngZone.runOutsideAngular(() => {
+      // Try each property type
+      const colorProp = vmi.color(path);
+      if (colorProp) {
+        const argb = colorProp.value;
+        const a = (argb >> 24) & 0xff;
+        const r = (argb >> 16) & 0xff;
+        const g = (argb >> 8) & 0xff;
+        const b = argb & 0xff;
+        return { r, g, b, a } as RiveColor;
+      }
+
+      const numberProp = vmi.number(path);
+      if (numberProp) return numberProp.value;
+
+      const stringProp = vmi.string(path);
+      if (stringProp) return stringProp.value;
+
+      const boolProp = vmi.boolean(path);
+      if (boolProp) return boolProp.value;
+
+      const enumProp = vmi.enum(path);
+      if (enumProp) return enumProp.value;
+
+      return undefined;
+    });
+  }
+
+  /**
+   * Fire a trigger property in the ViewModel.
+   * Use this for ViewModel-based triggers (data binding).
+   * For state machine triggers, use fireTrigger(stateMachineName, triggerName).
+   */
+  public fireViewModelTrigger(path: string): void {
+    const vmi = this.#viewModelInstance();
+    if (!vmi) {
+      this.logger.warn('No ViewModel instance available');
+      return;
+    }
+
+    this.#ngZone.runOutsideAngular(() => {
+      const triggerProp = vmi.trigger(path);
+      if (triggerProp) {
+        triggerProp.trigger();
+        this.logger.debug(`ViewModel trigger "${path}" fired`);
+      } else {
+        this.logger.warn(`ViewModel trigger "${path}" not found`);
+        this.#ngZone.run(() =>
+          this.loadError.emit(
+            new RiveValidationError(
+              formatErrorMessage(RiveErrorCode.DataBindingPropertyNotFound, {
+                path,
+              }),
+              RiveErrorCode.DataBindingPropertyNotFound,
+            ),
+          ),
+        );
+      }
+    });
+  }
+
+  /**
+   * Set a color value in the ViewModel.
+   * Accepts hex string ('#RRGGBB' or '#RRGGBBAA'), ARGB integer, or RiveColor object.
+   * Warning: If the property is controlled by dataBindings input, this change
+   * will be overwritten on the next input update.
+   */
+  public setColor(path: string, color: string | number | RiveColor): void {
+    const vmi = this.#viewModelInstance();
+    if (!vmi) {
+      this.logger.warn('No ViewModel instance available');
+      return;
+    }
+
+    // Check if this key is controlled by dataBindings input
+    const controlledBindings = this.dataBindings();
+    if (controlledBindings && path in controlledBindings) {
+      this.logger.warn(
+        `Color "${path}" is controlled by dataBindings input. This change will be overwritten on next input update.`,
+      );
+    }
+
+    this.#ngZone.runOutsideAngular(() => {
+      this.withLocalMutation(path, () => {
+        const colorProp = vmi.color(path);
+        if (!colorProp) {
+          this.logger.warn(`Color property "${path}" not found in ViewModel`);
+          this.#ngZone.run(() =>
+            this.loadError.emit(
+              new RiveValidationError(
+                formatErrorMessage(RiveErrorCode.DataBindingPropertyNotFound, {
+                  path,
+                }),
+                RiveErrorCode.DataBindingPropertyNotFound,
+              ),
+            ),
+          );
+          return;
+        }
+
+        try {
+          const parsedColor = parseRiveColor(color);
+          colorProp.rgba(parsedColor.r, parsedColor.g, parsedColor.b, parsedColor.a);
+          this.logger.debug(`Color "${path}" set to:`, parsedColor);
+        } catch (error) {
+          this.logger.warn(`Failed to set color "${path}":`, error);
+          this.#ngZone.run(() =>
+            this.loadError.emit(
+              new RiveValidationError(
+                `Failed to parse color value for "${path}": ${error instanceof Error ? error.message : String(error)}`,
+                RiveErrorCode.DataBindingTypeMismatch,
+              ),
+            ),
+          );
+        }
+      });
+    });
+  }
+
+  /**
+   * Get a color value from the ViewModel.
+   * Returns undefined if the property doesn't exist or ViewModel is not loaded.
+   */
+  public getColor(path: string): RiveColor | undefined {
+    const vmi = this.#viewModelInstance();
+    if (!vmi) return undefined;
+
+    return this.#ngZone.runOutsideAngular(() => {
+      const colorProp = vmi.color(path);
+      if (!colorProp) return undefined;
+
+      const argb = colorProp.value;
+      const a = (argb >> 24) & 0xff;
+      const r = (argb >> 16) & 0xff;
+      const g = (argb >> 8) & 0xff;
+      const b = argb & 0xff;
+
+      return { r, g, b, a };
+    });
+  }
+
+  /**
+   * Set a color value using RGBA components (0-255).
+   * Warning: If the property is controlled by dataBindings input, this change
+   * will be overwritten on the next input update.
+   */
+  public setColorRgba(
+    path: string,
+    r: number,
+    g: number,
+    b: number,
+    a: number = 255,
+  ): void {
+    this.setColor(path, { r, g, b, a });
+  }
+
+  /**
+   * Set the opacity of a color (0.0-1.0) while preserving RGB values.
+   * Warning: If the property is controlled by dataBindings input, this change
+   * will be overwritten on the next input update.
+   */
+  public setColorOpacity(path: string, opacity: number): void {
+    const vmi = this.#viewModelInstance();
+    if (!vmi) {
+      this.logger.warn('No ViewModel instance available');
+      return;
+    }
+
+    // Validate opacity range
+    if (opacity < 0 || opacity > 1) {
+      this.logger.warn(`Invalid opacity value ${opacity}: must be between 0.0 and 1.0`);
+      this.#ngZone.run(() =>
+        this.loadError.emit(
+          new RiveValidationError(
+            `Invalid opacity value for "${path}": ${opacity}. Expected value between 0.0 and 1.0.`,
+            RiveErrorCode.DataBindingTypeMismatch,
+          ),
+        ),
+      );
+      return;
+    }
+
+    // Check if this key is controlled by dataBindings input
+    const controlledBindings = this.dataBindings();
+    if (controlledBindings && path in controlledBindings) {
+      this.logger.warn(
+        `Color "${path}" is controlled by dataBindings input. This change will be overwritten on next input update.`,
+      );
+    }
+
+    this.#ngZone.runOutsideAngular(() => {
+      this.withLocalMutation(path, () => {
+        const colorProp = vmi.color(path);
+        if (!colorProp) {
+          this.logger.warn(`Color property "${path}" not found in ViewModel`);
+          this.#ngZone.run(() =>
+            this.loadError.emit(
+              new RiveValidationError(
+                formatErrorMessage(RiveErrorCode.DataBindingPropertyNotFound, {
+                  path,
+                }),
+                RiveErrorCode.DataBindingPropertyNotFound,
+              ),
+            ),
+          );
+          return;
+        }
+
+        colorProp.opacity(opacity);
+        this.logger.debug(`Color "${path}" opacity set to ${opacity}`);
+      });
+    });
+  }
+
   /**
    * Apply all text runs from input (controlled keys).
    * Called on every input change or load.
@@ -837,9 +1182,561 @@ export class RiveCanvasComponent implements AfterViewInit {
   }
 
   /**
+   * Initialize ViewModel instance if available in the loaded file.
+   * Called once after animation loads successfully.
+   */
+  private initializeViewModel(): void {
+    if (!this.#rive) return;
+
+    this.#ngZone.runOutsideAngular(() => {
+      try {
+        const viewModelName = this.viewModelName();
+        let viewModel;
+
+        // Get ViewModel by name or use default
+        if (viewModelName) {
+          viewModel = this.#rive!.viewModelByName(viewModelName);
+          if (!viewModel) {
+            this.logger.warn(
+              `ViewModel "${viewModelName}" not found. Available ViewModels:`,
+              this.getAvailableViewModelNames(),
+            );
+            this.#ngZone.run(() =>
+              this.loadError.emit(
+                new RiveValidationError(
+                  formatErrorMessage(RiveErrorCode.ViewModelNotFound, {
+                    name: viewModelName,
+                  }),
+                  RiveErrorCode.ViewModelNotFound,
+                  this.getAvailableViewModelNames(),
+                ),
+              ),
+            );
+            return;
+          }
+        } else {
+          viewModel = this.#rive!.defaultViewModel();
+        }
+
+        // If no ViewModel found (file doesn't use ViewModels), that's OK
+        if (!viewModel) {
+          this.logger.debug('No ViewModel found in file (file may not use ViewModels)');
+          return;
+        }
+
+        // Get ViewModel instance
+        const viewModelInstance = viewModel.instance();
+        if (!viewModelInstance) {
+          this.logger.warn('Failed to create ViewModel instance');
+          return;
+        }
+
+        // Bind to artboard
+        this.#rive!.bindViewModelInstance(viewModelInstance);
+
+        // Update signal
+        this.#ngZone.run(() => {
+          this.#viewModelInstance.set(viewModelInstance);
+        });
+
+        // Log ViewModel info in debug mode
+        this.logger.debug('ViewModel initialized:', {
+          name: viewModel.name,
+          properties: this.getViewModelPropertyInfo(viewModelInstance),
+        });
+
+        // Subscribe to ViewModel property changes for two-way binding
+        this.subscribeToViewModelChanges(viewModelInstance);
+      } catch (error) {
+        this.logger.error('Error initializing ViewModel:', error);
+      }
+    });
+  }
+
+  /**
+   * Get list of available ViewModel names for error messages.
+   */
+  private getAvailableViewModelNames(): string[] {
+    if (!this.#rive) return [];
+    const names: string[] = [];
+    const count = this.#rive.viewModelCount;
+    for (let i = 0; i < count; i++) {
+      const vm = this.#rive.viewModelByIndex(i);
+      if (vm) names.push(vm.name);
+    }
+    return names;
+  }
+
+  /**
+   * Get ViewModel property information for debug logging.
+   */
+  private getViewModelPropertyInfo(vmi: ViewModelInstance): Record<string, string> {
+    const info: Record<string, string> = {};
+    try {
+      const properties = vmi.properties;
+      for (const prop of properties) {
+        // Property has name and type
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        const propAny = prop as any;
+        const propertyType = this.normalizeViewModelPropertyType(propAny?.type);
+        info[propAny.name || 'unknown'] = propertyType ?? (propAny.type || 'unknown');
+      }
+    } catch (error) {
+      this.logger.warn('Failed to get ViewModel property info:', error);
+    }
+    return info;
+  }
+
+  /**
+   * Subscribe to ViewModel property changes for two-way data binding.
+   * Emits dataBindingChange output when properties change from within the animation.
+   */
+  private subscribeToViewModelChanges(vmi: ViewModelInstance): void {
+    this.cleanupViewModelSubscriptions();
+
+    const properties = vmi.properties ?? [];
+    if (!Array.isArray(properties)) {
+      return;
+    }
+
+    for (const property of properties) {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const propertyAny = property as any;
+      const path = propertyAny?.name;
+      if (typeof path !== 'string') {
+        continue;
+      }
+
+      const resolved = this.resolveViewModelProperty(vmi, path);
+      if (!resolved) {
+        continue;
+      }
+
+      const subscription = this.subscribeToPropertyChanges(
+        path,
+        resolved.type,
+        resolved.accessor,
+      );
+
+      if (subscription) {
+        this.#viewModelSubscriptionDisposers.add(subscription);
+      }
+    }
+  }
+
+  /**
+   * Subscribe to changes for a specific ViewModel property.
+   * Uses multiple event APIs to maximize compatibility with @rive-app/canvas runtime versions.
+   */
+  private subscribeToPropertyChanges(
+    path: string,
+    propertyType: DataBindingPropertyType,
+    property: unknown,
+  ): (() => void) | undefined {
+    const propertyAny = property as any;
+    if (!propertyAny) {
+      return undefined;
+    }
+
+    const callback = (): void => {
+      if (this.shouldSuppressLocalMutation(path)) {
+        return;
+      }
+
+      const value = this.readPropertyValue(propertyType, propertyAny);
+      if (value === undefined) return;
+
+      this.#ngZone.run(() => {
+        this.dataBindingChange.emit({
+          path,
+          value,
+          propertyType,
+        });
+      });
+    };
+
+    let unsubscribe: (() => void) | undefined;
+    try {
+      if (typeof propertyAny.on === 'function') {
+        try {
+          const handler = propertyAny.on(callback);
+          unsubscribe = this.buildUnsubscribeFromHandler(
+            propertyAny,
+            callback,
+            handler,
+          );
+        } catch {
+          const handler = propertyAny.on('change', callback);
+          unsubscribe = this.buildUnsubscribeFromHandler(
+            propertyAny,
+            callback,
+            handler,
+            true,
+          );
+        }
+      } else if (typeof propertyAny.subscribe === 'function') {
+        const handler = propertyAny.subscribe(callback);
+        unsubscribe = this.buildUnsubscribeFromHandler(propertyAny, callback, handler);
+      } else if (typeof propertyAny.addEventListener === 'function') {
+        propertyAny.addEventListener('change', callback);
+        unsubscribe = () => propertyAny.removeEventListener?.('change', callback);
+      } else if (typeof propertyAny.addListener === 'function') {
+        propertyAny.addListener('change', callback);
+        unsubscribe = () => propertyAny.removeListener?.('change', callback);
+      } else if (typeof propertyAny.onChange === 'function') {
+        const handler = propertyAny.onChange(callback);
+        unsubscribe = this.buildUnsubscribeFromHandler(propertyAny, callback, handler);
+      }
+    } catch (error) {
+      this.logger.warn(`Failed to subscribe to ViewModel property "${path}":`, error);
+    }
+
+    if (!unsubscribe) {
+      this.logger.warn(
+        `No supported subscription API found for ViewModel property "${path}"`,
+      );
+    }
+
+    return unsubscribe;
+  }
+
+  private buildUnsubscribeFromHandler(
+    property: any,
+    callback: () => void,
+    handler: unknown,
+    useLegacyEventApi?: boolean,
+  ): (() => void) | undefined {
+    if (typeof handler === 'function') {
+      return handler as () => void;
+    }
+
+    if (handler && typeof handler === 'object' && 'unsubscribe' in handler && typeof handler.unsubscribe === 'function') {
+      return () => (handler as { unsubscribe: () => void }).unsubscribe();
+    }
+
+    if (handler && typeof handler === 'object' && 'dispose' in handler && typeof handler.dispose === 'function') {
+      return () => (handler as { dispose: () => void }).dispose();
+    }
+
+    if (typeof property.off === 'function') {
+      return useLegacyEventApi
+        ? () => property.off('change', callback)
+        : () => property.off(callback);
+    }
+
+    if (typeof property.remove === 'function') {
+      return useLegacyEventApi
+        ? () => property.remove('change', callback)
+        : () => property.remove(callback);
+    }
+
+    if (typeof property.removeListener === 'function') {
+      return useLegacyEventApi
+        ? () => property.removeListener('change', callback)
+        : () => property.removeListener(callback);
+    }
+
+    if (typeof property.unsubscribe === 'function') {
+      return () => property.unsubscribe();
+    }
+
+    return undefined;
+  }
+
+  private withLocalMutation(path: string, fn: () => void): void {
+    const previous = this.#localMutationSuppressions.get(path) ?? 0;
+    this.#localMutationSuppressions.set(path, previous + 1);
+
+    try {
+      fn();
+    } finally {
+      setTimeout(() => {
+        const current = this.#localMutationSuppressions.get(path) ?? 0;
+        if (current <= 1) {
+          this.#localMutationSuppressions.delete(path);
+        } else {
+          this.#localMutationSuppressions.set(path, current - 1);
+        }
+      });
+    }
+  }
+
+  private shouldSuppressLocalMutation(path: string): boolean {
+    const current = this.#localMutationSuppressions.get(path);
+    if (current === undefined || current <= 0) {
+      return false;
+    }
+
+    if (current <= 1) {
+      this.#localMutationSuppressions.delete(path);
+    } else {
+      this.#localMutationSuppressions.set(path, current - 1);
+    }
+
+    return true;
+  }
+
+  private readPropertyValue(
+    propertyType: DataBindingPropertyType,
+    property: any,
+  ): DataBindingValue | undefined {
+    if (propertyType === 'color') {
+      if (!property || typeof property.value !== 'number') return undefined;
+      const argb = property.value;
+      const a = (argb >> 24) & 0xff;
+      const r = (argb >> 16) & 0xff;
+      const g = (argb >> 8) & 0xff;
+      const b = argb & 0xff;
+      return { r, g, b, a };
+    }
+
+    if (propertyType === 'number' && typeof property.value === 'number') {
+      return property.value;
+    }
+
+    if (propertyType === 'string' && typeof property.value === 'string') {
+      return property.value;
+    }
+
+    if (propertyType === 'boolean' && typeof property.value === 'boolean') {
+      return property.value;
+    }
+
+    if (propertyType === 'enum' && typeof property.value === 'string') {
+      return property.value;
+    }
+
+    if (propertyType === 'trigger') {
+      // Triggers don't have a meaningful value, but we return true to indicate the trigger fired
+      return true;
+    }
+
+    return undefined;
+  }
+
+  private normalizeViewModelPropertyType(type: unknown): DataBindingPropertyType | null {
+    if (typeof type !== 'string') {
+      return null;
+    }
+
+    const normalized = type.toLowerCase();
+    if (normalized.includes('color')) return 'color';
+    if (normalized.includes('number')) return 'number';
+    if (normalized.includes('string')) return 'string';
+    if (normalized.includes('boolean')) return 'boolean';
+    if (normalized.includes('enum')) return 'enum';
+    if (normalized.includes('trigger')) return 'trigger';
+
+    return null;
+  }
+
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  private resolveViewModelProperty(
+    vmi: ViewModelInstance,
+    path: string,
+  ): { accessor: any; type: DataBindingPropertyType } | null {
+    const color = vmi.color(path);
+    if (color) return { accessor: color, type: 'color' };
+
+    const number = vmi.number(path);
+    if (number) return { accessor: number, type: 'number' };
+
+    const string = vmi.string(path);
+    if (string) return { accessor: string, type: 'string' };
+
+    const bool = vmi.boolean(path);
+    if (bool) return { accessor: bool, type: 'boolean' };
+
+    const enumProp = vmi.enum(path);
+    if (enumProp) return { accessor: enumProp, type: 'enum' };
+
+    const trigger = vmi.trigger(path);
+    if (trigger) return { accessor: trigger, type: 'trigger' };
+
+    return null;
+  }
+
+  private emitDataBindingTypeMismatch(
+    path: string,
+    expectedType: DataBindingPropertyType,
+    actualType: string,
+  ): void {
+    this.#ngZone.run(() =>
+      this.loadError.emit(
+        new RiveValidationError(
+          formatErrorMessage(RiveErrorCode.DataBindingTypeMismatch, {
+            path,
+            expected: expectedType,
+            actual: actualType,
+          }),
+          RiveErrorCode.DataBindingTypeMismatch,
+        ),
+      ),
+    );
+  }
+
+  private cleanupViewModelSubscriptions(): void {
+    this.#viewModelSubscriptionDisposers.forEach((disposer) => {
+      try {
+        disposer();
+      } catch (error) {
+        this.logger.warn('Error during ViewModel subscription cleanup:', error);
+      }
+    });
+    this.#viewModelSubscriptionDisposers.clear();
+  }
+
+  /**
+   * Apply all data bindings from input (controlled keys).
+   * Called on every input change or load.
+   * Auto-detects property type from ViewModel and applies the value accordingly.
+   */
+  private applyDataBindings(bindings: Record<string, DataBindingValue>): void {
+    const vmi = this.#viewModelInstance();
+    if (!vmi) return;
+
+    this.#ngZone.runOutsideAngular(() => {
+      for (const [path, value] of Object.entries(bindings)) {
+        try {
+          const resolved = this.resolveViewModelProperty(vmi, path);
+          if (!resolved) {
+            this.logger.warn(
+              `Data binding property "${path}" not found in ViewModel`,
+            );
+            this.#ngZone.run(() =>
+              this.loadError.emit(
+                new RiveValidationError(
+                  formatErrorMessage(RiveErrorCode.DataBindingPropertyNotFound, {
+                    path,
+                  }),
+                  RiveErrorCode.DataBindingPropertyNotFound,
+                ),
+              ),
+            );
+            continue;
+          }
+
+          let applied = false;
+          this.withLocalMutation(path, () => {
+            applied = this.tryApplyBinding(path, value, resolved);
+          });
+          if (applied) {
+            this.logger.debug(`Data binding "${path}" set to:`, value);
+          } else {
+            this.logger.warn(
+              `Data binding property "${path}" has a type mismatch for value type ${typeof value}`,
+            );
+          }
+        } catch (error) {
+          this.logger.warn(`Failed to set data binding "${path}":`, error);
+        }
+      }
+    });
+  }
+
+  /**
+   * Try to apply a binding value to a resolved ViewModel property.
+   * Returns true if successful, false on type mismatch.
+   */
+  private tryApplyBinding(
+    path: string,
+    value: DataBindingValue,
+    resolved: { accessor: any; type: DataBindingPropertyType },
+  ): boolean {
+    const { accessor, type } = resolved;
+
+    if (type === 'color') {
+      if (typeof value === 'object' && value !== null && 'r' in value) {
+        // RiveColor object
+        const color = value as RiveColor;
+        accessor.rgba(color.r, color.g, color.b, color.a);
+        return true;
+      }
+      if (typeof value === 'string' || typeof value === 'number') {
+        // Hex string or ARGB integer
+        const color = parseRiveColor(value);
+        accessor.rgba(color.r, color.g, color.b, color.a);
+        return true;
+      }
+      this.logger.warn(
+        `Invalid color value for "${path}": expected string, number, or RiveColor`,
+      );
+      this.emitDataBindingTypeMismatch(path, type, typeof value);
+      return false;
+    }
+
+    if (type === 'number') {
+      if (typeof value === 'number') {
+        accessor.value = value;
+        return true;
+      }
+      this.logger.warn(
+        `Invalid number value for "${path}": expected number, got ${typeof value}`,
+      );
+      this.emitDataBindingTypeMismatch(path, type, typeof value);
+      return false;
+    }
+
+    if (type === 'string') {
+      if (typeof value === 'string') {
+        accessor.value = value;
+        return true;
+      }
+      this.logger.warn(
+        `Invalid string value for "${path}": expected string, got ${typeof value}`,
+      );
+      this.emitDataBindingTypeMismatch(path, type, typeof value);
+      return false;
+    }
+
+    if (type === 'boolean') {
+      if (typeof value === 'boolean') {
+        accessor.value = value;
+        return true;
+      }
+      this.logger.warn(
+        `Invalid boolean value for "${path}": expected boolean, got ${typeof value}`,
+      );
+      this.emitDataBindingTypeMismatch(path, type, typeof value);
+      return false;
+    }
+
+    if (type === 'enum') {
+      if (typeof value === 'string') {
+        accessor.value = value;
+        return true;
+      }
+      this.logger.warn(
+        `Invalid enum value for "${path}": expected string, got ${typeof value}`,
+      );
+      this.emitDataBindingTypeMismatch(path, type, typeof value);
+      return false;
+    }
+
+    if (type === 'trigger') {
+      this.logger.warn(`Cannot set trigger property "${path}" via setDataBinding`);
+      return false;
+    }
+
+    return false;
+  }
+
+  /**
    * Clean up Rive instance only
    */
   private cleanupRive(): void {
+    this.cleanupViewModelSubscriptions();
+    this.#localMutationSuppressions.clear();
+
+    const vmi = this.#viewModelInstance();
+    if (vmi) {
+      try {
+        vmi.cleanup();
+      } catch (error) {
+        this.logger.warn('Error during ViewModel cleanup:', error);
+      }
+    }
+
     if (this.#rive) {
       try {
         this.#rive.cleanup();
@@ -851,6 +1748,7 @@ export class RiveCanvasComponent implements AfterViewInit {
 
     // Reset signals
     this.#riveInstance.set(null);
+    this.#viewModelInstance.set(null);
     this.#isLoaded.set(false);
     this.#isPlaying.set(false);
     this.#isPaused.set(false);

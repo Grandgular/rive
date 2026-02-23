@@ -56,6 +56,138 @@ describe('RiveCanvasComponent', () => {
   let component: RiveCanvasComponent;
   let fixture: ComponentFixture<RiveCanvasComponent>;
   let mockRive: jest.Mocked<Rive>;
+  const createMockViewModel = () => {
+    const viewModelInstance = createMockViewModelInstance();
+    return {
+      name: 'MainViewModel',
+      instance: jest.fn(() => viewModelInstance),
+    };
+  };
+  const createMockProperty = <T>(initialValue: T) => {
+    let currentValue = initialValue;
+    const listeners: Array<() => void> = [];
+    const property = {
+      on: jest.fn((...args: unknown[]) => {
+        const callback =
+          typeof args[0] === 'function'
+            ? (args[0] as () => void)
+            : typeof args[1] === 'function'
+              ? (args[1] as () => void)
+              : undefined;
+
+        if (callback) {
+          listeners.push(callback);
+        }
+
+        return {
+          unsubscribe: () => {
+            if (callback) {
+              const idx = listeners.indexOf(callback);
+              if (idx >= 0) {
+                listeners.splice(idx, 1);
+              }
+            }
+          },
+        };
+      }),
+      off: jest.fn(),
+      get value() {
+        return currentValue;
+      },
+      set value(nextValue: T) {
+        currentValue = nextValue;
+      },
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      rgba: jest.fn((...args: any[]) => {
+        const [r, g, b, a] = args;
+        (property as any).value =
+          (((a ?? 255) << 24) | (r << 16) | (g << 8) | b) >>> 0;
+      }),
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      opacity: jest.fn((opacity: any) => {
+        const value = (property as any).value as number;
+        (property as any).value =
+          (((opacity * 255) << 24) | (value & 0x00ffffff)) >>> 0;
+      }),
+      trigger: jest.fn(),
+      emitChange: () => {
+        listeners.forEach((listener) => listener());
+      },
+    };
+
+    return property as typeof property & {
+      on: jest.Mock;
+      off: jest.Mock;
+      value: T;
+      rgba: jest.Mock;
+      opacity: jest.Mock;
+      trigger: jest.Mock;
+      emitChange: () => void;
+    };
+  };
+
+  const createMockViewModelInstance = () => {
+    const colorValue = createMockProperty(0xffffffff);
+    const numberValue = createMockProperty(0);
+    const stringValue = createMockProperty('initial');
+    const booleanValue = createMockProperty(false);
+    const enumValue = createMockProperty('idle');
+    const triggerValue = createMockProperty('trigger');
+
+    return {
+      properties: [
+        { name: 'backgroundColor', type: 'color' },
+        { name: 'score', type: 'number' },
+        { name: 'playerName', type: 'string' },
+        { name: 'isActive', type: 'boolean' },
+        { name: 'gameState', type: 'enum' },
+        { name: 'onComplete', type: 'trigger' },
+      ],
+      color: jest.fn((path: string) => {
+        if (path === 'backgroundColor') return colorValue;
+        return undefined;
+      }),
+      number: jest.fn((path: string) => {
+        if (path === 'score') return numberValue;
+        return undefined;
+      }),
+      string: jest.fn((path: string) => {
+        if (path === 'playerName') return stringValue;
+        return undefined;
+      }),
+      boolean: jest.fn((path: string) => {
+        if (path === 'isActive') return booleanValue;
+        return undefined;
+      }),
+      enum: jest.fn((path: string) => {
+        if (path === 'gameState') return enumValue;
+        return undefined;
+      }),
+      trigger: jest.fn((path: string) => {
+        if (path === 'onComplete') return triggerValue;
+        return undefined;
+      }),
+      cleanup: jest.fn(),
+      get colorValue() {
+        return colorValue;
+      },
+      get numberValue() {
+        return numberValue;
+      },
+      get stringValue() {
+        return stringValue;
+      },
+      get booleanValue() {
+        return booleanValue;
+      },
+      get enumValue() {
+        return enumValue;
+      },
+      get triggerValue() {
+        return triggerValue;
+      },
+    } as const;
+  };
 
   beforeEach(async () => {
     mockRive = {
@@ -70,6 +202,13 @@ describe('RiveCanvasComponent', () => {
       stateMachineInputs: jest.fn(() => []),
       setTextRunValue: jest.fn(),
       setTextRunValueAtPath: jest.fn(),
+      bindViewModelInstance: jest.fn(),
+      defaultViewModel: jest.fn(createMockViewModel),
+      viewModelByName: jest.fn((name: string) =>
+        name === 'MainViewModel' ? createMockViewModel() : undefined,
+      ),
+      viewModelByIndex: jest.fn(() => createMockViewModel()),
+      viewModelCount: 1,
       artboardNames: [],
       animationNames: [],
       stateMachineNames: [],
@@ -1010,6 +1149,321 @@ describe('RiveCanvasComponent', () => {
           done();
         }, 0);
       });
+    });
+  });
+
+  describe('Data Binding (ViewModel)', () => {
+    let onLoadCallback: (() => void) | undefined;
+    let mockViewModelInstance: ReturnType<typeof createMockViewModelInstance>;
+    let mockViewModel: { name: string; instance: () => ReturnType<typeof createMockViewModelInstance> };
+
+    beforeEach(() => {
+      mockViewModelInstance = createMockViewModelInstance();
+      mockViewModel = {
+        name: 'MainViewModel',
+        instance: () => mockViewModelInstance,
+      };
+
+      mockRive.defaultViewModel = jest.fn(() => mockViewModel as any) as any;
+      mockRive.viewModelByName = jest.fn((name: string) => {
+        return name === 'MainViewModel' ? (mockViewModel as any) : undefined;
+      }) as any;
+      mockRive.viewModelByIndex = jest.fn(() => mockViewModel as any) as any;
+
+      (Rive as jest.MockedClass<typeof Rive>).mockImplementation(
+        (config: any) => {
+          onLoadCallback = config.onLoad;
+          return mockRive;
+        },
+      );
+    });
+
+    it('should apply dataBindings on load with auto-detected types', (done) => {
+      fixture.componentRef.setInput('src', 'test.riv');
+      fixture.componentRef.setInput('dataBindings', {
+        backgroundColor: '#FF5733',
+        score: 42,
+        playerName: 'Alice',
+        isActive: true,
+        gameState: 'running',
+      });
+      fixture.detectChanges();
+
+      onLoadCallback!();
+
+      setTimeout(() => {
+        expect(mockViewModelInstance.colorValue.rgba).toHaveBeenCalledWith(
+          255,
+          87,
+          51,
+          255,
+        );
+        expect(mockViewModelInstance.numberValue.value).toBe(42);
+        expect(mockViewModelInstance.stringValue.value).toBe('Alice');
+        expect(mockViewModelInstance.booleanValue.value).toBe(true);
+        expect(mockViewModelInstance.enumValue.value).toBe('running');
+        expect(mockRive.bindViewModelInstance).toHaveBeenCalledWith(
+          mockViewModelInstance,
+        );
+        done();
+      }, 0);
+    });
+
+    it('should emit dataBindingChange on callback from ViewModel property updates', (done) => {
+      fixture.componentRef.setInput('src', 'test.riv');
+      fixture.detectChanges();
+
+      const emitted: Array<{
+        path: string;
+        propertyType: string;
+        value: unknown;
+      }> = [];
+      component.dataBindingChange.subscribe((event) => emitted.push(event));
+
+      onLoadCallback!();
+
+      setTimeout(() => {
+        mockViewModelInstance.numberValue.value = 13;
+        mockViewModelInstance.numberValue.emitChange();
+
+        setTimeout(() => {
+          expect(emitted).toEqual(
+            expect.arrayContaining([
+              expect.objectContaining({
+                path: 'score',
+                propertyType: 'number',
+                value: 13,
+              }),
+            ]),
+          );
+          done();
+        }, 0);
+      }, 0);
+    });
+
+    it('should support get/set helpers and fireTrigger', (done) => {
+      fixture.componentRef.setInput('src', 'test.riv');
+      fixture.componentRef.setInput('dataBindings', { isActive: true });
+      fixture.detectChanges();
+
+      onLoadCallback!();
+
+      setTimeout(() => {
+        expect(component.getDataBinding('score')).toBe(0);
+
+        component.setDataBinding('score', 5);
+        expect(mockViewModelInstance.numberValue.value).toBe(5);
+        expect(component.getDataBinding('score')).toBe(5);
+        component.setDataBinding('playerName', 'Bob');
+        expect(mockViewModelInstance.stringValue.value).toBe('Bob');
+        expect(component.getDataBinding('playerName')).toBe('Bob');
+        component.fireViewModelTrigger('onComplete');
+        expect(mockViewModelInstance.triggerValue.trigger).toHaveBeenCalled();
+        done();
+      }, 0);
+    });
+
+    it('should mark controlled keys warning and keep uncontrolled path mutable', (done) => {
+      const warnSpy = jest.spyOn(console, 'warn').mockImplementation();
+
+      fixture.componentRef.setInput('src', 'test.riv');
+      fixture.componentRef.setInput('dataBindings', { score: 1 });
+      fixture.componentRef.setInput('debugMode', true);
+      fixture.detectChanges();
+
+      onLoadCallback!();
+
+      setTimeout(() => {
+        component.setDataBinding('score', 2);
+        component.setDataBinding('gameState', 'paused');
+        expect(warnSpy).toHaveBeenCalledWith(
+          expect.stringContaining('controlled by dataBindings input'),
+        );
+        expect(mockViewModelInstance.numberValue.value).toBe(2);
+        expect(mockViewModelInstance.enumValue.value).toBe('paused');
+        warnSpy.mockRestore();
+        done();
+      }, 0);
+    });
+
+    it('should emit type mismatch validation error', (done) => {
+      fixture.componentRef.setInput('src', 'test.riv');
+      fixture.detectChanges();
+
+      const errors: Error[] = [];
+      component.loadError.subscribe((error) => errors.push(error));
+      onLoadCallback!();
+
+      setTimeout(() => {
+        component.setDataBinding('score', 'invalid');
+        setTimeout(() => {
+          expect(errors.some((error) => error.name === 'RiveValidationError')).toBe(
+            true,
+          );
+          done();
+        }, 0);
+      }, 0);
+    });
+
+    it('should cleanup property subscriptions on destroy', (done) => {
+      const onDisposalSpy = jest.fn();
+      const unsubscribe = () => {
+        onDisposalSpy();
+      };
+
+      const trackedProperty = createMockProperty(10);
+      trackedProperty.on.mockImplementationOnce(() => ({ unsubscribe }));
+
+      const localViewModelInstance = {
+        properties: [{ name: 'score', type: 'number' }],
+        number: jest.fn((path: string) => (path === 'score' ? trackedProperty : undefined)),
+        string: jest.fn(),
+        boolean: jest.fn(),
+        color: jest.fn(),
+        enum: jest.fn(),
+        trigger: jest.fn(),
+        cleanup: jest.fn(),
+      };
+      const localViewModel = {
+        name: 'MainViewModel',
+        instance: jest.fn(() => localViewModelInstance),
+      };
+      mockRive.defaultViewModel = jest.fn(() => localViewModel as any);
+
+      fixture.componentRef.setInput('src', 'test.riv');
+      fixture.detectChanges();
+
+      onLoadCallback!();
+
+      setTimeout(() => {
+        fixture.destroy();
+        expect(onDisposalSpy).toHaveBeenCalled();
+        done();
+      }, 0);
+    });
+
+    it('should emit dataBindingChange when trigger fires', (done) => {
+      fixture.componentRef.setInput('src', 'test.riv');
+      fixture.detectChanges();
+
+      const emitted: Array<{
+        path: string;
+        propertyType: string;
+        value: unknown;
+      }> = [];
+      component.dataBindingChange.subscribe((event) => emitted.push(event));
+
+      onLoadCallback!();
+
+      setTimeout(() => {
+        mockViewModelInstance.triggerValue.emitChange();
+
+        setTimeout(() => {
+          expect(emitted).toEqual(
+            expect.arrayContaining([
+              expect.objectContaining({
+                path: 'onComplete',
+                propertyType: 'trigger',
+                value: true,
+              }),
+            ]),
+          );
+          done();
+        }, 0);
+      }, 0);
+    });
+
+    it('should reinitialize ViewModel when viewModelName changes', (done) => {
+      const alternateVM = createMockViewModel();
+      alternateVM.name = 'AlternateViewModel';
+      mockRive.viewModelByName = jest.fn((name: string) => {
+        if (name === 'MainViewModel') return mockViewModel as any;
+        if (name === 'AlternateViewModel') return alternateVM as any;
+        return null;
+      }) as any;
+
+      fixture.componentRef.setInput('src', 'test.riv');
+      fixture.componentRef.setInput('viewModelName', 'MainViewModel');
+      fixture.detectChanges();
+
+      onLoadCallback!();
+
+      setTimeout(() => {
+        expect(mockRive.viewModelByName).toHaveBeenCalledWith('MainViewModel');
+
+        fixture.componentRef.setInput('viewModelName', 'AlternateViewModel');
+        fixture.detectChanges();
+
+        setTimeout(() => {
+          expect(mockRive.viewModelByName).toHaveBeenCalledWith('AlternateViewModel');
+          done();
+        }, 0);
+      }, 0);
+    });
+
+    it('should emit validation error for invalid opacity value', (done) => {
+      fixture.componentRef.setInput('src', 'test.riv');
+      fixture.detectChanges();
+
+      const errors: Error[] = [];
+      component.loadError.subscribe((error) => errors.push(error));
+
+      onLoadCallback!();
+
+      setTimeout(() => {
+        component.setColorOpacity('backgroundColor', 1.5);
+
+        setTimeout(() => {
+          expect(errors.some((error) => 
+            error.name === 'RiveValidationError' && 
+            error.message.includes('opacity')
+          )).toBe(true);
+          done();
+        }, 0);
+      }, 0);
+    });
+
+    it('should emit validation error for non-existent property in imperative API', (done) => {
+      fixture.componentRef.setInput('src', 'test.riv');
+      fixture.detectChanges();
+
+      const errors: Error[] = [];
+      component.loadError.subscribe((error) => errors.push(error));
+
+      onLoadCallback!();
+
+      setTimeout(() => {
+        component.setDataBinding('nonExistentProperty', 42);
+
+        setTimeout(() => {
+          expect(errors.some((error) => 
+            error.name === 'RiveValidationError' &&
+            error.message.includes('not found')
+          )).toBe(true);
+          done();
+        }, 0);
+      }, 0);
+    });
+
+    it('should emit validation error for invalid color format', (done) => {
+      fixture.componentRef.setInput('src', 'test.riv');
+      fixture.detectChanges();
+
+      const errors: Error[] = [];
+      component.loadError.subscribe((error) => errors.push(error));
+
+      onLoadCallback!();
+
+      setTimeout(() => {
+        component.setColor('backgroundColor', 'invalid-color');
+
+        setTimeout(() => {
+          expect(errors.some((error) => 
+            error.name === 'RiveValidationError'
+          )).toBe(true);
+          done();
+        }, 0);
+      }, 0);
     });
   });
 });

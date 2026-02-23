@@ -191,6 +191,221 @@ this.riveRef().setTextRunValueAtPath(
 - **Uncontrolled**: Keys not in `textRuns` — managed imperatively via methods
 - **Warning**: Calling `setTextRunValue()` on a controlled key logs a warning and the change will be overwritten on next input update
 
+### Data Binding (ViewModel)
+
+Rive's ViewModel system allows you to bind dynamic data (colors, numbers, strings, booleans, etc.) to your animations. ViewModels are created in the Rive editor and provide a structured way to control animation properties at runtime.
+
+#### What is a ViewModel?
+
+A ViewModel in Rive is a data structure that:
+- Is created by designers in the Rive editor
+- Contains typed properties (color, number, string, boolean, enum, trigger)
+- Can be bound to animation elements (fills, strokes, transforms, etc.)
+- Supports two-way data binding (changes in code affect animation, changes in animation can trigger events)
+
+#### When to use Data Binding vs Text Runs?
+
+- **Text Runs**: Simple text updates, no ViewModel setup required in editor
+- **Data Binding**: Dynamic colors, numbers, complex data structures, two-way reactivity
+
+#### Declarative (Controlled) Approach
+
+Use the `dataBindings` input for reactive, template-driven data binding:
+
+```typescript
+import { Component, signal } from '@angular/core';
+import { RiveCanvasComponent } from '@grandgular/rive-angular';
+
+@Component({
+  selector: 'app-data-binding',
+  standalone: true,
+  imports: [RiveCanvasComponent],
+  template: `
+    <rive-canvas
+      src="assets/animation.riv"
+      [dataBindings]="{
+        backgroundColor: themeColor(),
+        score: playerScore(),
+        playerName: userName(),
+        isActive: isGameActive()
+      }"
+      (dataBindingChange)="onDataChange($event)"
+    />
+    
+    <button (click)="changeTheme()">Change Theme</button>
+    <button (click)="incrementScore()">+10 Points</button>
+  `
+})
+export class DataBindingComponent {
+  themeColor = signal('#FF5733');
+  playerScore = signal(0);
+  userName = signal('Player 1');
+  isGameActive = signal(true);
+
+  changeTheme() {
+    const colors = ['#FF5733', '#33FF57', '#3357FF', '#F333FF'];
+    const randomColor = colors[Math.floor(Math.random() * colors.length)];
+    this.themeColor.set(randomColor);
+  }
+
+  incrementScore() {
+    this.playerScore.update(score => score + 10);
+  }
+
+  onDataChange(event: DataBindingChangeEvent) {
+    console.log('Property changed from animation:', event);
+    // event.path: property path
+    // event.value: new value (for triggers, value is always true)
+    // event.propertyType: 'color' | 'number' | 'string' | 'boolean' | 'enum' | 'trigger'
+    
+    if (event.propertyType === 'trigger') {
+      console.log(`Trigger "${event.path}" fired from animation`);
+      // Handle trigger event (e.g., show popup, play sound, etc.)
+    }
+  }
+}
+```
+
+#### Imperative (Uncontrolled) Approach
+
+Use methods for direct, programmatic control:
+
+```typescript
+import { Component, viewChild } from '@angular/core';
+import { RiveCanvasComponent } from '@grandgular/rive-angular';
+
+@Component({
+  selector: 'app-imperative',
+  standalone: true,
+  imports: [RiveCanvasComponent],
+  template: `
+    <rive-canvas src="assets/animation.riv" />
+    
+    <button (click)="updateColor()">Update Color</button>
+    <button (click)="updateScore()">Update Score</button>
+    <button (click)="triggerAnimation()">Fire Trigger</button>
+  `
+})
+export class ImperativeComponent {
+  riveRef = viewChild.required(RiveCanvasComponent);
+
+  updateColor() {
+    // Set color using hex string
+    this.riveRef().setColor('backgroundColor', '#00FF00');
+    
+    // Or using RGBA components
+    this.riveRef().setColorRgba('backgroundColor', 0, 255, 0, 255);
+    
+    // Or change only opacity
+    this.riveRef().setColorOpacity('backgroundColor', 0.5);
+  }
+
+  updateScore() {
+    // Set any data binding value (auto-detects type)
+    this.riveRef().setDataBinding('score', 100);
+    this.riveRef().setDataBinding('playerName', 'Winner');
+    this.riveRef().setDataBinding('isActive', false);
+  }
+
+  triggerAnimation() {
+    // Fire a trigger property
+    this.riveRef().fireViewModelTrigger('onComplete');
+  }
+
+  readValues() {
+    // Read current values
+    const color = this.riveRef().getColor('backgroundColor');
+    // color: { r: 0, g: 255, b: 0, a: 255 }
+    
+    const score = this.riveRef().getDataBinding('score');
+    // score: 100 (auto-detected as number)
+  }
+}
+```
+
+#### Color Utilities
+
+The library exports color conversion utilities for advanced use cases:
+
+```typescript
+import { parseRiveColor, riveColorToArgb, riveColorToHex } from '@grandgular/rive-angular';
+
+// Parse various color formats
+const color1 = parseRiveColor('#FF5733');        // { r: 255, g: 87, b: 51, a: 255 }
+const color2 = parseRiveColor('#FF573380');      // { r: 255, g: 87, b: 51, a: 128 }
+const color3 = parseRiveColor(0x80FF5733);       // { r: 255, g: 87, b: 51, a: 128 }
+const color4 = parseRiveColor({ r: 255, g: 0, b: 0, a: 255 });
+
+// Convert to ARGB integer
+const argb = riveColorToArgb({ r: 255, g: 0, b: 0, a: 255 }); // 0xFFFF0000
+
+// Convert to hex string
+const hex = riveColorToHex({ r: 255, g: 0, b: 0, a: 255 }); // '#FF0000FF'
+```
+
+#### Selecting a ViewModel
+
+If your `.riv` file contains multiple ViewModels, specify which one to use:
+
+```typescript
+<rive-canvas
+  src="assets/animation.riv"
+  viewModelName="GameViewModel"
+  [dataBindings]="{ score: 42 }"
+/>
+```
+
+If `viewModelName` is not provided, the default ViewModel for the artboard is used.
+
+#### Controlled vs Uncontrolled
+
+Same semantics as Text Runs:
+
+- **Controlled**: Keys in `dataBindings` input — managed by Angular, input is source of truth
+- **Uncontrolled**: Keys not in `dataBindings` — managed imperatively via methods
+- **Warning**: Calling `setDataBinding()` or `setColor()` on a controlled key logs a warning and the change will be overwritten on next input update
+
+#### Validation and Error Handling
+
+Imperative methods (`setDataBinding`, `setColor`, `setColorOpacity`, `fireViewModelTrigger`) emit validation errors via the `loadError` output when:
+
+- Property path doesn't exist in the ViewModel (`RIVE_402`)
+- Value type doesn't match property type (`RIVE_403`)
+- Color format is invalid (hex string, ARGB integer, or RiveColor object expected)
+- Opacity value is out of range (must be between 0.0 and 1.0)
+
+```typescript
+<rive-canvas
+  src="assets/animation.riv"
+  (loadError)="handleError($event)"
+/>
+
+handleError(error: Error) {
+  if (error instanceof RiveValidationError) {
+    console.error('Validation error:', error.code, error.message);
+  }
+}
+```
+
+#### Advanced: Direct ViewModel Access
+
+For advanced scenarios, access the ViewModel instance directly:
+
+```typescript
+riveRef = viewChild.required(RiveCanvasComponent);
+
+advancedUsage() {
+  const vmi = this.riveRef().viewModelInstance();
+  if (vmi) {
+    // Direct access to ViewModel SDK methods
+    const colorProp = vmi.color('backgroundColor');
+    if (colorProp) {
+      colorProp.rgba(255, 0, 0, 255);
+    }
+  }
+}
+```
+
 ### Preloading files with RiveFileService
 
 For better performance, you can preload and cache .riv files:
@@ -304,6 +519,9 @@ In this case, `onError` receives a `RiveValidationError` with code `RIVE_201`, a
 | `RIVE_205` | Validation | Text run not found |
 | `RIVE_301` | Config | No animation source provided |
 | `RIVE_302` | Config | Invalid canvas element |
+| `RIVE_401` | Data Binding | ViewModel not found |
+| `RIVE_402` | Data Binding | Property not found in ViewModel |
+| `RIVE_403` | Data Binding | Type mismatch (value doesn't match property type) |
 
 ## API Reference
 

@@ -191,7 +191,7 @@ Features users requested that were never implemented or partially implemented.
 | Visibility-based playback | ✅ Implemented | `shouldUseIntersectionObserver` input |
 | Animation state tracking | ✅ Implemented | `isPlaying`, `isPaused`, `isLoaded` signals |
 | Rive Text | ✅ Implemented (v0.3.0) | `textRuns` input + `getTextRunValue()` / `setTextRunValue()` / `AtPath` methods |
-| Color changes | ⏳ Planned | Via `riveInstance` signal for now |
+| Color changes | ✅ Implemented (v0.4.0) | ViewModel Data Binding: `dataBindings` input + `setColor()` / `getColor()` methods |
 | Auto-reset | ⏳ Planned | Not yet implemented |
 | Node/Bone | ⏳ Planned | Via `riveInstance` signal for now |
 
@@ -299,7 +299,7 @@ This explicitly resolves issues #23 and #22 by providing actionable feedback ins
 | #59 | Rive Text | Medium | ✅ Resolved | `textRuns` input + imperative methods (v0.3.0) |
 | #58 | Doc typo | Low | ✅ N/A | Fresh documentation |
 | #57 | Play when visible | High | ✅ Resolved | IntersectionObserver built-in |
-| #56 | Change color | Medium | ⏳ Workaround | Via riveInstance signal |
+| #56 | Change color | Medium | ✅ Resolved | ViewModel Data Binding (v0.4.0) |
 | #54 | shouldFire fails | Medium | ✅ Resolved | Different API design |
 | #53 | Instance deleted | Critical | ✅ Resolved | Proper cleanup |
 | #52 | Multiple artboards | Critical | ✅ Resolved | No shared state |
@@ -444,12 +444,73 @@ Based on ng-rive issues analysis, here are features to consider:
 - [x] Controlled/uncontrolled semantics with warning on misuse
 - [x] Error code `RIVE_205` (`TextRunNotFound`) for text run validation
 
-### Phase 4: Advanced Features (Planned)
+### Phase 4: Data Binding (ViewModel) Support ✅ Complete (v0.4.0)
 
-- [ ] `setFillColor(shapeName, color)` method
+- [x] `viewModelName` input to select ViewModel
+- [x] `dataBindings` input for declarative data binding (controlled keys)
+- [x] `dataBindingChange` output for two-way reactivity
+- [x] `viewModelInstance` signal for advanced access
+- [x] Auto-detect property types (color, number, string, boolean, enum, trigger)
+- [x] `setDataBinding()` / `getDataBinding()` for imperative control (uncontrolled keys)
+- [x] `fireViewModelTrigger()` for trigger properties
+- [x] Color convenience methods: `setColor()`, `getColor()`, `setColorRgba()`, `setColorOpacity()`
+- [x] Color utilities: `parseRiveColor()`, `riveColorToArgb()`, `riveColorToHex()`
+- [x] Error codes `RIVE_4xx` for Data Binding validation
+- [x] Controlled/uncontrolled semantics (same pattern as textRuns)
+
+**Why ViewModel instead of `setFillColor()`?**
+
+The Rive SDK doesn't provide a direct `setFillColor(shapeName, color)` method. Instead, Rive uses a **ViewModel / Data Binding** system where designers create ViewModels in the editor with typed properties (color, number, string, etc.) and bind them to animation elements. This is the official, recommended approach for dynamic data in Rive.
+
+**Usage Examples:**
+
+```typescript
+// Declarative (controlled) — reactive via input
+@Component({
+  template: `
+    <rive-canvas
+      src="animation.riv"
+      [dataBindings]="{
+        backgroundColor: '#FF5733',
+        score: playerScore(),
+        playerName: userName(),
+        isActive: true
+      }"
+    />
+  `
+})
+export class MyComponent {
+  playerScore = signal(42);
+  userName = signal('Alice');
+}
+```
+
+```typescript
+// Imperative (uncontrolled) — direct method calls
+riveRef = viewChild.required(RiveCanvasComponent);
+
+updateColor() {
+  this.riveRef().setColor('backgroundColor', '#00FF00');
+  this.riveRef().setColorOpacity('backgroundColor', 0.5);
+}
+
+updateData() {
+  this.riveRef().setDataBinding('score', 100);
+  this.riveRef().fireViewModelTrigger('onComplete');
+}
+
+// Read values
+readData() {
+  const color = this.riveRef().getColor('backgroundColor');
+  const score = this.riveRef().getDataBinding('score');
+}
+```
+
+### Phase 5: Advanced Features (Planned)
+
 - [ ] `autoReset` input for animation reset
 - [ ] `animationComplete` / `animationLoop` events
-- [ ] Bone/node manipulation helpers
+- [ ] Bone/node manipulation helpers (via ViewModel if supported by Rive SDK)
 
 ---
 
@@ -461,8 +522,15 @@ The @grandgular/rive-angular library was designed with the explicit goal of **pr
 2.  **Proper resource management**: Synchronous cleanup, no shared state
 3.  **Zero configuration**: Works out of the box without injection tokens
 4.  **Clear API boundaries**: Single component with well-defined inputs/outputs
+5.  **Official SDK patterns**: Uses ViewModel for data binding (not workarounds)
 
-We have successfully prevented **~90% of the issues** that ng-rive users faced. With v0.3.0 adding full Text Run support (the most requested missing feature — issue #59), the remaining gaps are niche feature requests (color changes, bone/node manipulation) that can be addressed through the `riveInstance` signal workaround today, with dedicated methods planned for future releases.
+We have successfully prevented **~90% of the issues** that ng-rive users faced. With v0.4.0 adding full Data Binding (ViewModel) support — including the most requested color manipulation feature (issue #56) — the library now provides feature parity with React's `@rive-app/react-webgl2` hooks while maintaining Angular's reactive patterns.
+
+**Note on Feature Parity**: While we achieve functional parity with React's ViewModel hooks, the API surface differs by design:
+- React uses composable hooks (`useViewModelInstanceString`, `useViewModelInstanceColor`, etc.) with individual state management
+- Angular uses a unified component API with `dataBindings` input (declarative) and imperative methods (uncontrolled)
+- Both approaches support two-way data binding, but Angular's output-based model (`dataBindingChange`) differs from React's hook-based reactivity
+- Trigger events: React uses `onTrigger` callbacks in hooks; Angular emits via `dataBindingChange` output with `propertyType: 'trigger'` and `value: true`
 
 ---
 

@@ -15,12 +15,27 @@ This library provides a **modern, Angular-native** way to integrate Rive animati
 - 🔄 **Reactive**: Signal-based API for reactive state management
 - 🛠️ **Developer Experience**: Built-in debug mode, validation, and detailed error codes
 - 🔒 **Production-ready**: Comprehensive audit completed, all critical issues resolved (v0.2.0)
+- 🎨 **Data Binding**: Full ViewModel support for dynamic colors, numbers, strings, and two-way reactivity (v0.4.0)
 
 ## Documentation
 
 - [Full Documentation](libs/rive-angular/README.md)
 - [Changelog](libs/rive-angular/CHANGELOG.md)
 - [Issues Analysis & Roadmap](libs/rive-angular/docs/ng-rive-issues-analysis.md)
+
+## Latest Release: v0.4.0 (2026-02-23)
+
+**Data Binding (ViewModel) Support** — Full integration with Rive's ViewModel system:
+
+- ✅ Declarative data binding via `dataBindings` input (controlled keys)
+- ✅ Imperative methods: `setDataBinding()`, `setColor()`, `setColorOpacity()`, `fireViewModelTrigger()`
+- ✅ Two-way reactivity via `dataBindingChange` output (including trigger events)
+- ✅ Auto-detect property types (color, number, string, boolean, enum, trigger)
+- ✅ Color manipulation with multiple formats (hex, ARGB, RiveColor object)
+- ✅ Validation errors via `RIVE_4xx` error codes
+- ✅ Feature parity with React's `@rive-app/react-webgl2` hooks
+
+See [CHANGELOG.md](libs/rive-angular/CHANGELOG.md) for full details.
 
 ## Installation
 
@@ -31,7 +46,8 @@ npm install @grandgular/rive-angular @rive-app/canvas
 ## Quick Start
 
 ```typescript
-import { RiveCanvasComponent, Fit, Alignment } from '@grandgular/rive-angular';
+import { RiveCanvasComponent, Fit } from '@grandgular/rive-angular';
+import { signal } from '@angular/core';
 
 @Component({
   standalone: true,
@@ -41,6 +57,7 @@ import { RiveCanvasComponent, Fit, Alignment } from '@grandgular/rive-angular';
       src="assets/animation.riv"
       [stateMachines]="'StateMachine'"
       [textRuns]="{ title: 'Hello Angular!' }"
+      [dataBindings]="{ backgroundColor: themeColor(), score: score() }"
       [fit]="Fit.Cover"
       [debugMode]="true"
     />
@@ -48,6 +65,8 @@ import { RiveCanvasComponent, Fit, Alignment } from '@grandgular/rive-angular';
 })
 export class AppComponent {
   Fit = Fit;
+  themeColor = signal('#FF5733');
+  score = signal(0);
 }
 ```
 

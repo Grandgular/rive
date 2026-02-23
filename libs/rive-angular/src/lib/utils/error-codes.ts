@@ -5,6 +5,7 @@
  * - RIVE_1xx: Load errors (file not found, network, bad format)
  * - RIVE_2xx: Validation errors (artboard, animation, state machine mismatch)
  * - RIVE_3xx: Configuration/Usage errors (missing source, bad canvas)
+ * - RIVE_4xx: Data Binding errors (ViewModel, property not found, type mismatch)
  */
 export enum RiveErrorCode {
   // Load Errors
@@ -22,6 +23,11 @@ export enum RiveErrorCode {
   // Configuration Errors
   NoSource = 'RIVE_301',
   InvalidCanvas = 'RIVE_302',
+
+  // Data Binding Errors
+  ViewModelNotFound = 'RIVE_401',
+  DataBindingPropertyNotFound = 'RIVE_402',
+  DataBindingTypeMismatch = 'RIVE_403',
 }
 
 /**
@@ -39,6 +45,11 @@ export const ERROR_MESSAGES: Record<RiveErrorCode, string> = {
   [RiveErrorCode.TextRunNotFound]: 'Text run "{name}" not found',
   [RiveErrorCode.NoSource]: 'No animation source provided',
   [RiveErrorCode.InvalidCanvas]: 'Invalid canvas element',
+  [RiveErrorCode.ViewModelNotFound]: 'ViewModel "{name}" not found',
+  [RiveErrorCode.DataBindingPropertyNotFound]:
+    'Data binding property "{path}" not found in ViewModel',
+  [RiveErrorCode.DataBindingTypeMismatch]:
+    'Data binding type mismatch for "{path}": expected {expected}, got {actual}',
 };
 
 /**

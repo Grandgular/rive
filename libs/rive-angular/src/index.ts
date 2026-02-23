@@ -22,15 +22,26 @@ export {
   RiveValidationError,
   RiveErrorCode,
   type RiveErrorOptions,
-  type RiveEvent
+  type RiveEvent,
+  type RiveColor,
+  type DataBindingValue,
+  type DataBindingChangeEvent,
+  type DataBindingPropertyType,
 } from './lib/models';
 
 // Debug Configuration
 export {
   provideRiveDebug,
   type RiveDebugConfig,
-  type LogLevel
+  type LogLevel,
 } from './lib/utils/debug-config';
+
+// Color utilities for data binding
+export {
+  parseRiveColor,
+  riveColorToArgb,
+  riveColorToHex,
+} from './lib/utils/color-parser';
 
 // Re-export commonly used types from @rive-app/canvas for convenience
 export {
@@ -38,6 +49,7 @@ export {
   RiveFile,
   Layout,
   StateMachineInput,
+  ViewModelInstance,
   type LayoutParameters,
   type RiveParameters,
   type RiveFileParameters,

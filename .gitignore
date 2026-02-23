@@ -17,6 +17,7 @@ node_modules
 .settings/
 *.sublime-workspace
 .cursor
+.codex
 
 # IDE - VSCode
 .vscode/*

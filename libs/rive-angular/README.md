@@ -5,6 +5,8 @@
 
 Modern Angular wrapper for [Rive](https://rive.app) animations with reactive state management, built with Angular signals and zoneless architecture.
 
+**1.0.0** is the first stable release: the public API follows [Semantic Versioning](https://semver.org/) from this version onward.
+
 ## What is Rive?
 
 [Rive](https://rive.app) is a real-time interactive design and animation tool. It allows designers and developers to create animations that respond to different states and user inputs. Rive animations are lightweight, interactive, and can be used in apps, games, and websites.
@@ -546,6 +548,8 @@ In this case, `onError` receives a `RiveValidationError` with code `RIVE_201`, a
 | `automaticallyHandleEvents` | `boolean` | `false` | Auto-handle Rive events (e.g., OpenUrlEvent) |
 | `debugMode` | `boolean` | `undefined` | Enable verbose logging for this instance |
 | `textRuns` | `Record<string, string>` | - | Declarative text run values. Keys present are controlled by input. |
+| `viewModelName` | `string` | - | ViewModel to use for data binding (if the `.riv` file defines ViewModels) |
+| `dataBindings` | `Record<string, DataBindingValue>` | - | Declarative ViewModel property values. Keys present are controlled by input. |
 
 #### Outputs
 
@@ -556,6 +560,63 @@ In this case, `onError` receives a `RiveValidationError` with code `RIVE_201`, a
 | `stateChange` | `RiveEvent` | Emitted on state machine state changes |
 | `riveEvent` | `RiveEvent` | Emitted for custom Rive events |
 | `riveReady` | `Rive` | Emitted when Rive instance is **fully loaded** and ready (after `loaded`) |
+| `dataBindingChange` | `DataBindingChangeEvent` | Emitted when a ViewModel property changes (two-way binding) |
+| `animationPlay` | `RiveEvent` | Emitted when playback starts (`type: EventType.Play`) |
+| `animationPause` | `RiveEvent` | Emitted when playback pauses (`type: EventType.Pause`) |
+| `animationStop` | `RiveEvent` | Emitted when playback stops (`type: EventType.Stop`) |
+| `animationLoop` | `RiveEvent` | Emitted when a loop iteration completes; `event.data` is a `LoopEvent` (animation name + `LoopType`) |
+| `animationAdvance` | `RiveEvent` | Emitted every frame while advancing; **high frequency** — use sparingly. Not wrapped in `NgZone.run`; trigger change detection manually if the view must update |
+
+#### Animation lifecycle events
+
+Listen for play/pause/stop/loop/advance without subscribing to the raw Rive instance:
+
+```typescript
+import { Component } from '@angular/core';
+import {
+  RiveCanvasComponent,
+  type RiveEvent,
+  EventType,
+  LoopType,
+  type LoopEvent,
+} from '@grandgular/rive-angular';
+
+@Component({
+  imports: [RiveCanvasComponent],
+  template: `
+    <rive-canvas
+      src="animation.riv"
+      (animationPlay)="onAnimationPlay($event)"
+      (animationPause)="onAnimationPause($event)"
+      (animationStop)="onAnimationStop($event)"
+      (animationLoop)="onAnimationLoop($event)"
+    />
+  `,
+})
+export class LifecycleDemoComponent {
+  onAnimationPlay(_event: RiveEvent) {
+    // event.type === EventType.Play
+  }
+
+  onAnimationPause(_event: RiveEvent) {
+    // event.type === EventType.Pause
+  }
+
+  onAnimationStop(_event: RiveEvent) {
+    // event.type === EventType.Stop
+  }
+
+  onAnimationLoop(event: RiveEvent) {
+    const loopData = event.data as LoopEvent;
+    // e.g. one-shot completion:
+    if (loopData.type === LoopType.OneShot) {
+      // animation finished its single run
+    }
+  }
+}
+```
+
+`LoopType` and `LoopEvent` are re-exported from `@grandgular/rive-angular` for convenience.
 
 #### Public Signals (Readonly)
 
@@ -567,6 +628,7 @@ All signals are **readonly** and cannot be mutated externally. Use the public me
 | `isPaused` | `Signal<boolean>` | Whether animation is paused |
 | `isLoaded` | `Signal<boolean>` | Whether animation is loaded |
 | `riveInstance` | `Signal<Rive \| null>` | Direct access to Rive instance |
+| `viewModelInstance` | `Signal<ViewModelInstance \| null>` | Active ViewModel instance after load, if the file uses ViewModels |
 
 **Note:** Signals are readonly to prevent external mutation. Use component methods (`playAnimation()`, `pauseAnimation()`, etc.) to control the animation state.
 

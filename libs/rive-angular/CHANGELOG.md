@@ -2,6 +2,28 @@
 
 All notable changes to this project will be documented in this file.
 
+## [1.0.0] - 2026-04-07
+
+### Added
+
+- **Animation lifecycle events**: New outputs that mirror Rive constructor callbacks.
+  - `animationPlay` — emitted when animation starts playing.
+  - `animationPause` — emitted when animation pauses.
+  - `animationStop` — emitted when animation stops.
+  - `animationLoop` — emitted when a loop iteration completes; `event.data` contains `LoopEvent` (animation name and `LoopType`).
+  - `animationAdvance` — emitted on every advance tick (high frequency; for advanced use only). Emitted outside `NgZone.run` to avoid change detection every frame; call `ChangeDetectorRef` manually if the template must update.
+
+- **New exports**: `LoopType` enum and `LoopEvent` type re-exported from `@rive-app/canvas` for use with `animationLoop`.
+
+### Changed
+
+- `onPlay`, `onPause`, and `onStop` handlers now emit the corresponding outputs in addition to updating `isPlaying` / `isPaused` (backward compatible).
+
+### Notes
+
+- **Stable release**: This version is treated as production-ready; [Semantic Versioning](https://semver.org/) applies from **1.0.0** onward.
+- **No breaking changes** relative to 0.4.0: all changes since 0.4.0 are additive.
+
 ## [0.4.0] - 2026-02-23
 
 ### Added

@@ -1,6 +1,14 @@
 import { ComponentFixture, TestBed } from '@angular/core/testing';
 import { RiveCanvasComponent } from './rive-canvas.component';
-import { Rive, RiveFile, Fit, Alignment } from '@rive-app/canvas';
+import {
+  Rive,
+  RiveFile,
+  Fit,
+  Alignment,
+  EventType,
+  LoopType,
+  type RiveParameters,
+} from '@rive-app/canvas';
 
 // Mock Rive
 jest.mock('@rive-app/canvas', () => ({
@@ -31,6 +39,18 @@ jest.mock('@rive-app/canvas', () => ({
   EventType: {
     Load: 'load',
     LoadError: 'loaderror',
+    Play: 'play',
+    Pause: 'pause',
+    Stop: 'stop',
+    Loop: 'loop',
+    Advance: 'advance',
+    StateChange: 'statechange',
+    RiveEvent: 'riveevent',
+  },
+  LoopType: {
+    OneShot: 'oneshot',
+    Loop: 'loop',
+    PingPong: 'pingpong',
   },
 }));
 
@@ -475,6 +495,151 @@ describe('RiveCanvasComponent', () => {
     });
   });
 
+  describe('Animation lifecycle events', () => {
+    it('should pass onLoop and onAdvance callbacks to Rive', () => {
+      fixture.componentRef.setInput('src', 'test.riv');
+      fixture.detectChanges();
+
+      expect(Rive).toHaveBeenCalledWith(
+        expect.objectContaining({
+          onLoop: expect.any(Function),
+          onAdvance: expect.any(Function),
+        }),
+      );
+    });
+
+    it('should emit animationPlay and keep isPlaying in sync', (done) => {
+      let onPlayCallback: RiveParameters['onPlay'];
+
+      (Rive as jest.MockedClass<typeof Rive>).mockImplementation(
+        (config: RiveParameters) => {
+          onPlayCallback = config.onPlay;
+          return mockRive;
+        },
+      );
+
+      const playSpy = jest.fn();
+      component.animationPlay.subscribe(playSpy);
+
+      fixture.componentRef.setInput('src', 'test.riv');
+      fixture.detectChanges();
+
+      onPlayCallback?.({ type: EventType.Play });
+
+      setTimeout(() => {
+        expect(playSpy).toHaveBeenCalledWith({ type: EventType.Play });
+        expect(component.isPlaying()).toBe(true);
+        expect(component.isPaused()).toBe(false);
+        done();
+      }, 0);
+    });
+
+    it('should emit animationPause and keep isPaused in sync', (done) => {
+      let onPauseCallback: RiveParameters['onPause'];
+
+      (Rive as jest.MockedClass<typeof Rive>).mockImplementation(
+        (config: RiveParameters) => {
+          onPauseCallback = config.onPause;
+          return mockRive;
+        },
+      );
+
+      const pauseSpy = jest.fn();
+      component.animationPause.subscribe(pauseSpy);
+
+      fixture.componentRef.setInput('src', 'test.riv');
+      fixture.detectChanges();
+
+      onPauseCallback?.({ type: EventType.Pause });
+
+      setTimeout(() => {
+        expect(pauseSpy).toHaveBeenCalledWith({ type: EventType.Pause });
+        expect(component.isPaused()).toBe(true);
+        expect(component.isPlaying()).toBe(false);
+        done();
+      }, 0);
+    });
+
+    it('should emit animationStop and reset playing state', (done) => {
+      let onStopCallback: RiveParameters['onStop'];
+
+      (Rive as jest.MockedClass<typeof Rive>).mockImplementation(
+        (config: RiveParameters) => {
+          onStopCallback = config.onStop;
+          return mockRive;
+        },
+      );
+
+      const stopSpy = jest.fn();
+      component.animationStop.subscribe(stopSpy);
+
+      fixture.componentRef.setInput('src', 'test.riv');
+      fixture.detectChanges();
+
+      onStopCallback?.({ type: EventType.Stop });
+
+      setTimeout(() => {
+        expect(stopSpy).toHaveBeenCalledWith({ type: EventType.Stop });
+        expect(component.isPlaying()).toBe(false);
+        expect(component.isPaused()).toBe(false);
+        done();
+      }, 0);
+    });
+
+    it('should emit animationLoop with loop event data', (done) => {
+      let onLoopCallback: RiveParameters['onLoop'];
+
+      (Rive as jest.MockedClass<typeof Rive>).mockImplementation(
+        (config: RiveParameters) => {
+          onLoopCallback = config.onLoop;
+          return mockRive;
+        },
+      );
+
+      const loopSpy = jest.fn();
+      component.animationLoop.subscribe(loopSpy);
+
+      fixture.componentRef.setInput('src', 'test.riv');
+      fixture.detectChanges();
+
+      const loopPayload = {
+        type: EventType.Loop,
+        data: { animation: 'idle', type: LoopType.OneShot },
+      };
+      onLoopCallback?.(loopPayload);
+
+      setTimeout(() => {
+        expect(loopSpy).toHaveBeenCalledWith(loopPayload);
+        done();
+      }, 0);
+    });
+
+    it('should emit animationAdvance when Rive advances a frame', (done) => {
+      let onAdvanceCallback: RiveParameters['onAdvance'];
+
+      (Rive as jest.MockedClass<typeof Rive>).mockImplementation(
+        (config: RiveParameters) => {
+          onAdvanceCallback = config.onAdvance;
+          return mockRive;
+        },
+      );
+
+      const advanceSpy = jest.fn();
+      component.animationAdvance.subscribe(advanceSpy);
+
+      fixture.componentRef.setInput('src', 'test.riv');
+      fixture.detectChanges();
+
+      const advancePayload = { type: EventType.Advance };
+      onAdvanceCallback?.(advancePayload);
+
+      setTimeout(() => {
+        expect(advanceSpy).toHaveBeenCalledWith(advancePayload);
+        done();
+      }, 0);
+    });
+  });
+
   describe('Configuration', () => {
     it('should pass artboard to Rive config', () => {
       fixture.componentRef.setInput('src', 'test.riv');
@@ -774,11 +939,11 @@ describe('RiveCanvasComponent', () => {
   describe('Text Runs', () => {
     beforeEach(() => {
       mockRive.getTextRunValue = jest.fn((name: string) => `value-${name}`);
-      mockRive.setTextRunValue = jest.fn((textRunName: string, textRunValue: string) => {});
+      mockRive.setTextRunValue = jest.fn();
       mockRive.getTextRunValueAtPath = jest.fn(
         (name: string, path: string) => `value-${name}-${path}`,
       );
-      mockRive.setTextRunValueAtPath = jest.fn((textRunName: string, textRunValue: string, path: string) => {});
+      mockRive.setTextRunValueAtPath = jest.fn();
     });
 
     describe('textRuns input (controlled keys)', () => {

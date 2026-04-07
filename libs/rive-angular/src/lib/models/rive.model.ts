@@ -3,8 +3,8 @@ import { RiveErrorCode } from '../utils';
 /**
  * Re-export Rive SDK types for consumer convenience
  */
-export { Fit, Alignment, EventType } from '@rive-app/canvas';
-export type { Event as RiveEvent } from '@rive-app/canvas';
+export { Fit, Alignment, EventType, LoopType } from '@rive-app/canvas';
+export type { Event as RiveEvent, LoopEvent } from '@rive-app/canvas';
 
 /**
  * Options for constructing a RiveLoadError with detailed context.

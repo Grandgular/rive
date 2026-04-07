@@ -24,6 +24,7 @@ import {
   StateMachineInput,
   type LayoutParameters,
   Event as RiveEvent,
+  EventType,
   ViewModelInstance,
 } from '@rive-app/canvas';
 import { RiveLoadError } from '../models';
@@ -199,6 +200,33 @@ export class RiveCanvasComponent implements AfterViewInit {
    */
   public readonly dataBindingChange = output<DataBindingChangeEvent>();
 
+  /**
+   * Emitted when animation starts playing.
+   * Payload uses {@link EventType.Play}; the Rive constructor callback does not pass `data`.
+   */
+  public readonly animationPlay = output<RiveEvent>();
+  /**
+   * Emitted when animation is paused.
+   * Payload uses {@link EventType.Pause}.
+   */
+  public readonly animationPause = output<RiveEvent>();
+  /**
+   * Emitted when animation stops (distinct from pause — typically resets to the start).
+   * Payload uses {@link EventType.Stop}.
+   */
+  public readonly animationStop = output<RiveEvent>();
+  /**
+   * Emitted when an animation completes a loop iteration.
+   * `event.data` contains loop details (see `LoopEvent` exported from this package).
+   */
+  public readonly animationLoop = output<RiveEvent>();
+  /**
+   * Emitted on every animation frame advance.
+   * **Performance:** Fires very frequently (often 60+ times per second). Use only for advanced cases.
+   * Emitted **outside** the Angular zone to avoid triggering change detection every frame; call `ChangeDetectorRef.markForCheck()` / `detectChanges()` in the handler if the view must update.
+   */
+  public readonly animationAdvance = output<RiveEvent>();
+
   // Private writable signals
   readonly #isPlaying = signal<boolean>(false);
   readonly #isPaused = signal<boolean>(false);
@@ -300,7 +328,7 @@ export class RiveCanvasComponent implements AfterViewInit {
 
     // Effect to reinitialize ViewModel when viewModelName changes after load
     effect(() => {
-      const viewModelName = this.viewModelName();
+      this.viewModelName();
       const isLoaded = this.#isLoaded();
       untracked(() => {
         if (isLoaded && this.#rive) {
@@ -515,6 +543,8 @@ export class RiveCanvasComponent implements AfterViewInit {
           onPlay: () => this.onPlay(),
           onPause: () => this.onPause(),
           onStop: () => this.onStop(),
+          onLoop: (event: RiveEvent) => this.onLoop(event),
+          onAdvance: (event: RiveEvent) => this.onAdvance(event),
           onStateChange: (event: RiveEvent) => this.onStateChange(event),
           onRiveEvent: (event: RiveEvent) => this.onRiveEvent(event),
         };
@@ -637,6 +667,7 @@ export class RiveCanvasComponent implements AfterViewInit {
     this.#ngZone.run(() => {
       this.#isPlaying.set(true);
       this.#isPaused.set(false);
+      this.animationPlay.emit({ type: EventType.Play });
     });
   }
 
@@ -644,6 +675,7 @@ export class RiveCanvasComponent implements AfterViewInit {
     this.#ngZone.run(() => {
       this.#isPlaying.set(false);
       this.#isPaused.set(true);
+      this.animationPause.emit({ type: EventType.Pause });
     });
   }
 
@@ -651,7 +683,21 @@ export class RiveCanvasComponent implements AfterViewInit {
     this.#ngZone.run(() => {
       this.#isPlaying.set(false);
       this.#isPaused.set(false);
+      this.animationStop.emit({ type: EventType.Stop });
     });
+  }
+
+  private onLoop(event: RiveEvent): void {
+    this.#ngZone.run(() => {
+      this.animationLoop.emit(event);
+    });
+  }
+
+  /**
+   * Forwarded from Rive `onAdvance`; kept outside the Angular zone intentionally.
+   */
+  private onAdvance(event: RiveEvent): void {
+    this.animationAdvance.emit(event);
   }
 
   private onStateChange(event: RiveEvent): void {
@@ -1093,7 +1139,7 @@ export class RiveCanvasComponent implements AfterViewInit {
     r: number,
     g: number,
     b: number,
-    a: number = 255,
+    a = 255,
   ): void {
     this.setColor(path, { r, g, b, a });
   }

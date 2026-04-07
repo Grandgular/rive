@@ -190,6 +190,7 @@ Features users requested that were never implemented or partially implemented.
 |---------|--------|----------------|
 | Visibility-based playback | ✅ Implemented | `shouldUseIntersectionObserver` input |
 | Animation state tracking | ✅ Implemented | `isPlaying`, `isPaused`, `isLoaded` signals |
+| Animation lifecycle events | ✅ Implemented (v1.0.0) | `animationPlay`, `animationPause`, `animationStop`, `animationLoop`, `animationAdvance` outputs |
 | Rive Text | ✅ Implemented (v0.3.0) | `textRuns` input + `getTextRunValue()` / `setTextRunValue()` / `AtPath` methods |
 | Color changes | ✅ Implemented (v0.4.0) | ViewModel Data Binding: `dataBindings` input + `setColor()` / `getColor()` methods |
 | Auto-reset | ⏳ Planned | Not yet implemented |
@@ -506,10 +507,10 @@ readData() {
 }
 ```
 
-### Phase 5: Advanced Features (Planned)
+### Phase 5: Advanced Features (partial — v1.0.0)
 
+- [x] Animation lifecycle outputs (`animationPlay`, `animationPause`, `animationStop`, `animationLoop`, `animationAdvance`) — **v1.0.0**
 - [ ] `autoReset` input for animation reset
-- [ ] `animationComplete` / `animationLoop` events
 - [ ] Bone/node manipulation helpers (via ViewModel if supported by Rive SDK)
 
 ---
@@ -524,7 +525,7 @@ The @grandgular/rive-angular library was designed with the explicit goal of **pr
 4.  **Clear API boundaries**: Single component with well-defined inputs/outputs
 5.  **Official SDK patterns**: Uses ViewModel for data binding (not workarounds)
 
-We have successfully prevented **~90% of the issues** that ng-rive users faced. With v0.4.0 adding full Data Binding (ViewModel) support — including the most requested color manipulation feature (issue #56) — the library now provides feature parity with React's `@rive-app/react-webgl2` hooks while maintaining Angular's reactive patterns.
+We have successfully prevented **~90% of the issues** that ng-rive users faced. With v0.4.0 adding full Data Binding (ViewModel) support — including the most requested color manipulation feature (issue #56) — the library now provides feature parity with React's `@rive-app/react-webgl2` hooks while maintaining Angular's reactive patterns. **v1.0.0** marks the first stable, production-ready release under semantic versioning, including animation lifecycle outputs for play/pause/stop/loop/advance.
 
 **Note on Feature Parity**: While we achieve functional parity with React's ViewModel hooks, the API surface differs by design:
 - React uses composable hooks (`useViewModelInstanceString`, `useViewModelInstanceColor`, etc.) with individual state management

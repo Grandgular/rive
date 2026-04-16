@@ -52,6 +52,10 @@ jest.mock('@rive-app/canvas', () => ({
     Loop: 'loop',
     PingPong: 'pingpong',
   },
+  RuntimeLoader: {
+    awaitInstance: jest.fn().mockResolvedValue(undefined),
+    setWasmUrl: jest.fn(),
+  },
 }));
 
 // Mock IntersectionObserver

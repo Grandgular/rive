@@ -2,6 +2,25 @@
 
 All notable changes to this project will be documented in this file.
 
+## [1.1.0] - 2026-04-16
+
+### Added
+
+- **Configurable runtime initialization** via new `provideRiveRuntime()` provider.
+  - `provideRiveRuntime({ wasmUrl })` enables **eager** runtime initialization on app startup.
+  - `provideRiveRuntime({ wasmUrl, lazy: true })` enables **lazy** initialization at first real usage.
+- **New public type export**: `RiveRuntimeConfig`.
+
+### Changed
+
+- Rive WASM runtime initialization is now internally coordinated by a shared, idempotent initializer.
+- `RiveCanvasComponent` and `RiveFileService` now ensure runtime readiness before creating Rive instances.
+
+### Notes
+
+- Existing integrations remain backward compatible.
+- `provideAppInitializer(() => RuntimeLoader.setWasmUrl(...))` is no longer required for typical setups; use `provideRiveRuntime()` instead.
+
 ## [1.0.0] - 2026-04-07
 
 ### Added

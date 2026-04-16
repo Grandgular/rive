@@ -38,12 +38,14 @@ import {
   ElementObserver,
   RiveLogger,
   RIVE_DEBUG_CONFIG,
+  RIVE_RUNTIME_CONFIG,
   validateConfiguration,
   validateInput,
   RiveErrorCode,
   formatErrorMessage,
   parseRiveColor,
 } from '../utils';
+import { ensureRiveRuntimeReady } from '../utils/rive-runtime';
 import { RiveValidationError } from '../models';
 
 /**
@@ -100,6 +102,7 @@ export class RiveCanvasComponent implements AfterViewInit {
   readonly #platformId = inject(PLATFORM_ID);
   readonly #ngZone = inject(NgZone);
   readonly #globalDebugConfig = inject(RIVE_DEBUG_CONFIG, { optional: true });
+  readonly #runtimeConfig = inject(RIVE_RUNTIME_CONFIG, { optional: true });
   readonly #elementObserver = inject(ElementObserver);
 
   public readonly src = input<string>();
@@ -263,6 +266,7 @@ export class RiveCanvasComponent implements AfterViewInit {
   private resizeRafId: number | null = null;
   private lastWidth = 0;
   private lastHeight = 0;
+  private loadRequestId = 0;
 
   constructor() {
     this.logger = new RiveLogger(this.#globalDebugConfig, this.debugMode());
@@ -339,6 +343,7 @@ export class RiveCanvasComponent implements AfterViewInit {
 
     // Auto cleanup on destroy
     this.#destroyRef.onDestroy(() => {
+      this.loadRequestId++;
       this.cleanupRive();
       this.disconnectResizeObserver();
       this.disconnectIntersectionObserver();
@@ -493,6 +498,7 @@ export class RiveCanvasComponent implements AfterViewInit {
   private loadAnimation(): void {
     // Run outside Angular zone for better performance
     this.#ngZone.runOutsideAngular(() => {
+      const requestId = ++this.loadRequestId;
       try {
         // Clean up existing Rive instance only
         this.cleanupRive();
@@ -570,12 +576,54 @@ export class RiveCanvasComponent implements AfterViewInit {
         // Combine all configurations
         const config = { ...baseConfig, ...sourceConfig, ...optionalConfig };
 
-        this.#rive = new Rive(config);
+        const createRiveInstance = () => {
+          if (requestId !== this.loadRequestId) {
+            return;
+          }
 
-        // Update public signal (riveReady will be emitted in onLoad)
-        this.#ngZone.run(() => {
-          this.#riveInstance.set(this.#rive);
-        });
+          const rive = new Rive(config);
+
+          if (requestId !== this.loadRequestId) {
+            try {
+              rive.cleanup();
+            } catch (cleanupError) {
+              this.logger.warn('Error during stale Rive cleanup:', cleanupError);
+            }
+            return;
+          }
+
+          this.#rive = rive;
+
+          // Update public signal (riveReady will be emitted in onLoad)
+          this.#ngZone.run(() => {
+            this.#riveInstance.set(this.#rive);
+          });
+        };
+
+        if (!this.#runtimeConfig) {
+          createRiveInstance();
+          return;
+        }
+
+        void ensureRiveRuntimeReady(this.#runtimeConfig)
+          .then(() => {
+            createRiveInstance();
+          })
+          .catch((error) => {
+            if (requestId !== this.loadRequestId) {
+              return;
+            }
+            this.logger.error('Failed to initialize Rive instance:', error);
+            this.#ngZone.run(() =>
+              this.loadError.emit(
+                new RiveLoadError({
+                  message: 'Failed to initialize Rive instance',
+                  code: RiveErrorCode.InvalidFormat,
+                  cause: error instanceof Error ? error : undefined,
+                }),
+              ),
+            );
+          });
       } catch (error) {
         this.logger.error('Failed to initialize Rive instance:', error);
         this.#ngZone.run(() =>

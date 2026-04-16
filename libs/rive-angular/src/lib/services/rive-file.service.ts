@@ -1,7 +1,8 @@
 import { Injectable, signal, Signal, inject } from '@angular/core';
 import { RiveFile, EventType } from '@rive-app/canvas';
-import { RIVE_DEBUG_CONFIG } from '../utils';
+import { RIVE_DEBUG_CONFIG, RIVE_RUNTIME_CONFIG } from '../utils';
 import { RiveLogger } from '../utils';
+import { ensureRiveRuntimeReady } from '../utils/rive-runtime';
 
 /**
  * Status of RiveFile loading
@@ -81,6 +82,9 @@ export class RiveFileService {
 
   // Optional debug configuration
   private readonly globalDebugConfig = inject(RIVE_DEBUG_CONFIG, {
+    optional: true,
+  });
+  private readonly runtimeConfig = inject(RIVE_RUNTIME_CONFIG, {
     optional: true,
   });
 
@@ -213,6 +217,10 @@ export class RiveFileService {
     };
 
     try {
+      if (this.runtimeConfig) {
+        await ensureRiveRuntimeReady(this.runtimeConfig);
+      }
+
       // Extract debug parameter - it's not part of RiveFile SDK API
       // eslint-disable-next-line @typescript-eslint/no-unused-vars
       const { debug, ...sdkParams } = params;

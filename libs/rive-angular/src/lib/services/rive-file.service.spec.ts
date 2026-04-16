@@ -1,6 +1,6 @@
 import { TestBed } from '@angular/core/testing';
 import { RiveFileService } from './rive-file.service';
-import { RiveFile, EventType } from '@rive-app/canvas';
+import { RiveFile, EventType, RuntimeLoader } from '@rive-app/canvas';
 
 // Mock RiveFile
 jest.mock('@rive-app/canvas', () => ({
@@ -8,6 +8,10 @@ jest.mock('@rive-app/canvas', () => ({
   EventType: {
     Load: 'load',
     LoadError: 'loaderror',
+  },
+  RuntimeLoader: {
+    awaitInstance: jest.fn(),
+    setWasmUrl: jest.fn(),
   },
 }));
 
@@ -38,6 +42,7 @@ describe('RiveFileService', () => {
     (RiveFile as jest.MockedClass<typeof RiveFile>).mockImplementation(
       () => mockRiveFile,
     );
+    (RuntimeLoader.awaitInstance as jest.Mock).mockResolvedValue(undefined);
 
     TestBed.configureTestingModule({
       providers: [RiveFileService],
@@ -125,9 +130,11 @@ describe('RiveFileService', () => {
       }, 0);
     });
 
-    it('should accept debug parameter but not pass it to RiveFile', () => {
+    it('should accept debug parameter but not pass it to RiveFile', async () => {
       const params = { src: 'debug.riv', debug: true };
       service.loadFile(params);
+      await Promise.resolve();
+      await Promise.resolve();
       // debug should be excluded from SDK params
       expect(RiveFile).toHaveBeenCalledWith({ src: 'debug.riv' });
     });

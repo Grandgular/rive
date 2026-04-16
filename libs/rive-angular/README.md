@@ -5,7 +5,7 @@
 
 Modern Angular wrapper for [Rive](https://rive.app) animations with reactive state management, built with Angular signals and zoneless architecture.
 
-**1.0.0** is the first stable release: the public API follows [Semantic Versioning](https://semver.org/) from this version onward.
+**1.x** is the stable major line: the public API follows [Semantic Versioning](https://semver.org/).
 
 ## What is Rive?
 
@@ -489,6 +489,57 @@ When debug mode is enabled, the library will log:
 - Available artboards, animations, and state machines
 - Validation warnings (e.g., misspelled animation names)
 
+## Runtime Initialization (WASM)
+
+Use `provideRiveRuntime()` to control when the Rive WASM runtime initializes.
+
+### Eager mode (default)
+
+Initializes runtime on app startup:
+
+```typescript
+import { ApplicationConfig } from '@angular/core';
+import { provideRiveRuntime } from '@grandgular/rive-angular';
+
+export const appConfig: ApplicationConfig = {
+  providers: [
+    provideRiveRuntime({ wasmUrl: 'assets/rive/rive.v1.wasm' }),
+  ],
+};
+```
+
+### Lazy mode
+
+Initializes runtime only when first needed (first `rive-canvas` init or `RiveFileService.loadFile()` call):
+
+```typescript
+import { ApplicationConfig } from '@angular/core';
+import { provideRiveRuntime } from '@grandgular/rive-angular';
+
+export const appConfig: ApplicationConfig = {
+  providers: [
+    provideRiveRuntime({
+      wasmUrl: 'assets/rive/rive.v1.wasm',
+      lazy: true,
+    }),
+  ],
+};
+```
+
+### Migration from `provideAppInitializer`
+
+If you used:
+
+```typescript
+provideAppInitializer(() => RuntimeLoader.setWasmUrl('assets/rive/rive.v1.wasm'))
+```
+
+you can now use:
+
+```typescript
+provideRiveRuntime({ wasmUrl: 'assets/rive/rive.v1.wasm' })
+```
+
 ## Error Handling & Validation
 
 The library validates your configuration against the loaded Rive file and provides structured error codes.
@@ -526,6 +577,19 @@ In this case, `onError` receives a `RiveValidationError` with code `RIVE_201`, a
 | `RIVE_403` | Data Binding | Type mismatch (value doesn't match property type) |
 
 ## API Reference
+
+### Runtime Provider
+
+```typescript
+interface RiveRuntimeConfig {
+  wasmUrl?: string;
+  lazy?: true;
+}
+```
+
+- `provideRiveRuntime(config?: RiveRuntimeConfig)` - configures Rive runtime initialization strategy.
+- `lazy` omitted - eager initialization on startup.
+- `lazy: true` - deferred initialization at first runtime usage.
 
 ### RiveCanvasComponent
 

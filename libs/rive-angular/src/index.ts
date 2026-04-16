@@ -38,6 +38,11 @@ export {
   type LogLevel,
 } from './lib/utils/debug-config';
 
+export {
+  provideRiveRuntime,
+  type RiveRuntimeConfig,
+} from './lib/utils/runtime-config';
+
 // Color utilities for data binding
 export {
   parseRiveColor,

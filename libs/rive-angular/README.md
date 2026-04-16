@@ -1,7 +1,12 @@
 # @grandgular/rive-angular
 
 [![npm version](https://img.shields.io/npm/v/@grandgular/rive-angular.svg)](https://www.npmjs.com/package/@grandgular/rive-angular)
+[![npm downloads](https://img.shields.io/npm/dm/@grandgular/rive-angular.svg)](https://www.npmjs.com/package/@grandgular/rive-angular)
+[![Bundle Size](https://img.shields.io/bundlephobia/minzip/@grandgular/rive-angular)](https://bundlephobia.com/package/@grandgular/rive-angular)
+[![Angular](https://img.shields.io/badge/Angular-18%2B-red)](https://angular.dev)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
+
+![Rive Angular showcase preview](https://raw.githubusercontent.com/Grandgular/rive/main/libs/rive-angular/docs/showcase-afi.gif)
 
 Modern Angular wrapper for [Rive](https://rive.app) animations with reactive state management, built with Angular signals and zoneless architecture.
 
@@ -30,30 +35,98 @@ This library provides a **modern, Angular-native** way to integrate Rive animati
 
 [ng-rive](https://www.npmjs.com/package/ng-rive) was the previous Angular wrapper for Rive, but it has been **unmaintained since 2021** and is incompatible with modern Angular versions:
 
-| Feature | @grandgular/rive-angular | ng-rive |
-|---------|--------------------------|---------|
-| Angular version | 18+ (modern) | 9-12 (legacy) |
-| Architecture | Signals, standalone | Modules, Zone.js |
-| Maintenance | ✅ Active | ❌ Abandoned (3+ years) |
-| TypeScript | Strict typing | Partial |
-| SSR support | ✅ Full | ⚠️ Limited |
-| Performance | Optimized (zoneless) | Standard |
-| File caching | ✅ Built-in service | ❌ Manual |
-| Validation | ✅ Built-in | ❌ None |
+| Feature | ng-rive | @grandgular/rive-angular |
+|---------|---------|--------------------------|
+| Angular version | 9-12 (legacy) | 18+ (modern) |
+| Architecture | Modules, Zone.js | Signals, standalone |
+| Maintenance | ❌ Abandoned (3+ years) | ✅ Active |
+| TypeScript | Partial | Strict typing |
+| SSR support | ⚠️ Limited | ✅ Full |
+| Performance | Standard | Optimized (zoneless) |
+| File caching | ❌ Manual | ✅ Built-in service |
+| Validation | ❌ None | ✅ Built-in |
 
 #### vs. rive-react
 
 This library follows the design principles of the official [rive-react](https://github.com/rive-app/rive-react) library but adapts them to Angular's reactive paradigm:
 
-| Aspect | @grandgular/rive-angular | rive-react |
-|--------|--------------------------|------------|
-| Component API | `<rive-canvas>` | `<Rive>` component |
-| Reactivity | Signals | Hooks (useState, useEffect) |
-| File preloading | `RiveFileService` | `useRiveFile` hook |
-| State access | Public signals | Hook return values |
-| Lifecycle | DestroyRef | useEffect cleanup |
+| Aspect | rive-react | @grandgular/rive-angular |
+|--------|------------|--------------------------|
+| Component API | `<Rive>` component | `<rive-canvas>` |
+| Reactivity | Hooks (useState, useEffect) | Signals |
+| File preloading | `useRiveFile` hook | `RiveFileService` |
+| State access | Hook return values | Public signals |
+| Lifecycle | useEffect cleanup | DestroyRef |
 
 Both libraries provide similar features and follow the same philosophy of providing a thin, reactive wrapper around the core Rive runtime.
+
+## Migration from ng-rive
+
+[ng-rive](https://www.npmjs.com/package/ng-rive) has been unmaintained since 2021 and does not support Angular 13+. If you're upgrading your Angular project, here's how to migrate.
+
+### 1. Replace the package
+
+```bash
+npm uninstall ng-rive
+npm install @grandgular/rive-angular @rive-app/canvas
+```
+
+### 2. Update imports
+
+| ng-rive | @grandgular/rive-angular |
+|---------|--------------------------|
+| `import { RiveModule } from 'ng-rive'` | `import { RiveCanvasComponent } from '@grandgular/rive-angular'` |
+| Add `RiveModule` to `NgModule.imports` | Add `RiveCanvasComponent` to `imports` of standalone component |
+
+### 3. Update templates
+
+**ng-rive:**
+
+```html
+<!-- NgModule-based, Zone.js -->
+<canvas riv="my-animation" width="500" height="500">
+  <riv-animation name="idle" [play]="true"></riv-animation>
+</canvas>
+```
+
+**@grandgular/rive-angular:**
+
+```html
+<!-- Standalone, signals, zoneless -->
+<rive-canvas
+  src="assets/my-animation.riv"
+  [autoplay]="true"
+  style="width: 500px; height: 500px"
+/>
+```
+
+### 4. State machines
+
+**ng-rive:**
+
+```html
+<canvas riv="my-animation">
+  <riv-state-machine name="StateMachine" [play]="true">
+    <riv-input name="isHover" [value]="hover"></riv-input>
+  </riv-state-machine>
+</canvas>
+```
+
+**@grandgular/rive-angular:**
+
+```html
+<rive-canvas
+  src="assets/my-animation.riv"
+  stateMachines="StateMachine"
+  (loaded)="onLoaded()"
+/>
+```
+
+```typescript
+onLoaded() {
+  this.riveCanvas().setInput('StateMachine', 'isHover', this.hover);
+}
+```
 
 ## Installation
 

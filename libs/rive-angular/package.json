@@ -1,6 +1,6 @@
 {
   "name": "@grandgular/rive-angular",
-  "version": "1.1.0",
+  "version": "1.1.1",
   "description": "Modern Angular wrapper for Rive animations with reactive state management, built with signals and zoneless architecture",
   "keywords": [
     "angular",
@@ -14,7 +14,12 @@
     "typescript",
     "ng",
     "interactive",
-    "reactive"
+    "reactive",
+    "ng-rive",
+    "zoneless",
+    "rive-angular",
+    "webgl2",
+    "angular-animation"
   ],
   "author": "Andrei Shpileuski",
   "license": "MIT",

@@ -269,7 +269,9 @@ export class RiveFileService {
 
       logger.debug(`RiveFileService: Initializing file`, { cacheKey });
 
-      file.init();
+      // Support both sync `init()` and Promise-returning `init()`; rejections must be awaited
+      // or they bypass this try/catch and leave the signal stuck in `loading`.
+      await Promise.resolve(file.init());
     } catch (error) {
       logger.error('RiveFileService: Unexpected error loading file', error);
 

@@ -113,7 +113,7 @@ export interface RiveFileParameters {
 }
 
 export interface RiveFile {
-  init(): void;
+  init(): void | Promise<void>;
   cleanup(): void;
   getInstance(): unknown;
   on(event: EventType, callback: () => void): void;

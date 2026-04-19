@@ -128,20 +128,17 @@ describe('RiveFileService', () => {
       }, 0);
     });
 
-    it('should handle init() failure (catch block)', (done) => {
-      // Mock init to reject
+    it('should handle init() failure (catch block)', async () => {
       mockRiveFile.init.mockRejectedValue(new Error('Init failed'));
 
       const params = { src: 'fail.riv' };
       const state = service.loadFile(params);
 
-      setTimeout(() => {
-        expect(state().status).toBe('failed');
-        // Should clear pending load so retry is possible
-        const state2 = service.loadFile(params);
-        expect(state2().status).toBe('loading'); // New loading state, not cached failed state
-        done();
-      }, 0);
+      await flushLoadMicrotasks();
+
+      expect(state().status).toBe('failed');
+      const state2 = service.loadFile(params);
+      expect(state2().status).toBe('loading');
     });
 
     it('should accept debug parameter but not pass it to RiveFile', async () => {
@@ -216,21 +213,16 @@ describe('RiveFileService', () => {
       }, 0);
     });
 
-    it('should call finalizePendingLoadOnce exactly once on init() exception', (done) => {
-      // Mock init to throw
+    it('should call finalizePendingLoadOnce exactly once on init() exception', async () => {
       mockRiveFile.init.mockRejectedValue(new Error('Init failed'));
 
       const params = { src: 'fail.riv' };
       service.loadFile(params);
 
-      setTimeout(() => {
-        // Verify pending load was cleared after exception
-        const state2 = service.loadFile(params);
-        
-        // Should create new loading state (retry possible)
-        expect(state2().status).toBe('loading');
-        done();
-      }, 0);
+      await flushLoadMicrotasks();
+
+      const state2 = service.loadFile(params);
+      expect(state2().status).toBe('loading');
     });
   });
 

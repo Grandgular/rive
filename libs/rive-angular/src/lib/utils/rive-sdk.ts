@@ -202,11 +202,16 @@ export async function loadRiveSdk(
 ): Promise<RiveSdkLoadResult> {
   try {
     if (renderer === 'webgl2') {
-      const sdk = (await import('@rive-app/webgl2')) as unknown as RiveSdkModule;
+      // Optional peer: suppress Vite pre-bundling so canvas-only apps need not install webgl2.
+      const sdk = (await import(
+        /* @vite-ignore */ '@rive-app/webgl2'
+      )) as unknown as RiveSdkModule;
       return { renderer, sdk };
     }
 
-    const sdk = (await import('@rive-app/canvas')) as unknown as RiveSdkModule;
+    const sdk = (await import(
+      /* @vite-ignore */ '@rive-app/canvas'
+    )) as unknown as RiveSdkModule;
     return { renderer: 'canvas', sdk };
   } catch (error) {
     if (isModuleResolutionError(error)) {

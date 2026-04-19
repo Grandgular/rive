@@ -2,6 +2,12 @@
 
 All notable changes to this project will be documented in this file.
 
+## [2.0.0-beta.3] - 2026-04-20
+
+### Fixed
+
+- Dynamic SDK imports: add `/* @vite-ignore */` so Vite does not fail to resolve optional peers (`@rive-app/webgl2` / `@rive-app/canvas`) when only one runtime is installed (e.g. canvas-only apps using default `renderer`).
+
 ## [2.0.0-beta.2] - 2026-04-20
 
 ### Fixed

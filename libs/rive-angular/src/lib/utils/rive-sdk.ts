@@ -166,6 +166,10 @@ export interface Rive {
   artboardNames?: string[];
   animationNames?: string[];
   stateMachineNames?: string[];
+  /** Subscribe to Rive-generated events (matches `@rive-app/canvas` / `@rive-app/webgl2`). */
+  on(type: EventType, callback: (event: RiveEvent) => void): void;
+  off(type: EventType, callback: (event: RiveEvent) => void): void;
+  removeAllRiveEventListeners(type?: EventType): void;
 }
 
 export type Layout = object;

@@ -2,6 +2,13 @@
 
 All notable changes to this project will be documented in this file.
 
+## [2.0.0-beta.1] - 2026-04-20
+
+### Fixed
+
+- `RiveFileService`: `await Promise.resolve(file.init())` so promise rejections from `RiveFile.init()` are handled and the file state moves to `failed` instead of staying `loading`.
+- `RiveFileService` tests: async `flushLoadMicrotasks()` for init-failure cases (reliable in CI).
+
 ## [2.0.0-beta.0] - 2026-04-19
 
 ### Added

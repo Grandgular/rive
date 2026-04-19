@@ -11,7 +11,7 @@
 Modern Angular wrapper for [Rive](https://rive.app) animations with reactive state management, built with Angular signals and zoneless architecture.
 
 **2.x** is the current major line: the public API follows [Semantic Versioning](https://semver.org/).
-Current release candidate in this branch: **`2.0.0-beta.0`** (pre-release).
+Current release candidate in this branch: **`2.0.0-beta.1`** (pre-release).
 
 ## Migration from v1 to v2
 

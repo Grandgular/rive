@@ -2,28 +2,38 @@
 
 All notable changes to this project will be documented in this file.
 
-## [1.2.0-beta.0] - 2026-04-17
+## [2.0.0-beta.0] - 2026-04-19
 
 ### Added
 
-- **Dual runtime support** for `@rive-app/canvas` and `@rive-app/webgl2`.
-- **New preferred component selector**: `<rive>` (with `<rive-canvas>` still supported as a legacy alias).
-- **New runtime options** in `provideRiveRuntime()`:
-  - `renderer?: 'canvas' | 'webgl2'` (default: `'canvas'`)
-  - `strict?: boolean` (default: `false`)
-- **Automatic fallback behavior** when `strict` is `false`: if the preferred renderer fails to initialize, the library tries the other renderer automatically.
+- **Dual runtime support** for `@rive-app/canvas` and `@rive-app/webgl2` with `provideRiveRuntime()` options `renderer` and `strict`, and automatic fallback when `strict` is `false`.
+- **Preferred component selector**: `<rive>` (with `<rive-canvas>` still supported as a legacy alias).
 - **Runtime tests** covering `webgl2`, fallback behavior, and strict mode failures.
 
 ### Changed
 
-- Runtime initialization now resolves and returns the active renderer module internally, used by both `RiveCanvasComponent` and `RiveFileService`.
-- Internal SDK imports are centralized through a shared facade to simplify runtime selection.
+- Runtime SDK loading now uses dynamic imports for both renderers and no longer keeps a static runtime import of `@rive-app/canvas`.
+- Runtime error handling now emits clearer missing-package and fallback failure messages, including install hints and `strict: true` guidance.
+- Runtime initialization defaults are centralized through `DEFAULT_RIVE_RUNTIME_RESOLVED_CONFIG` and reused by both `RiveCanvasComponent` and `RiveFileService`.
+- README/docs were updated to describe optional runtime peers and renderer/fallback installation matrix.
+
+### Fixed
+
+- Stabilized async zoneless specs in `RiveCanvasComponent` and `RiveFileService` by removing dangling timers and isolating runtime lifecycle state between tests.
+
+### Breaking Changes
+
+- The following exports from `@grandgular/rive-angular` are now **type-only** and are no longer runtime values: `Rive`, `RiveFile`, `Layout`, `StateMachineInput`, `ViewModelInstance`.
+- This removes accidental hard linkage to `@rive-app/canvas` in `webgl2-only` installs.
+
+### Migration
+
+- If you used these symbols as runtime classes/values, import them directly from the selected Rive SDK package (`@rive-app/canvas` or `@rive-app/webgl2`).
+- Typical component/service usage (`RiveCanvasComponent`, `RiveFileService`, `Fit`, `Alignment`, `EventType`, `LoopType`) remains unchanged.
 
 ### Notes
 
-- This release prioritizes backward compatibility and functional dual-support.
-- Bundle-level optimization (ensuring non-selected runtime is excluded from bundles) is intentionally planned for a follow-up release.
-- `<rive-canvas>` is now considered deprecated and is planned for removal in the next major release.
+- `<rive-canvas>` is deprecated and is planned for removal in a future major release.
 
 ## [1.1.0] - 2026-04-16
 

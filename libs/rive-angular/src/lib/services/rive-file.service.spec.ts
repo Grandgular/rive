@@ -1,6 +1,7 @@
 import { TestBed } from '@angular/core/testing';
 import { RiveFileService } from './rive-file.service';
 import { RiveFile, EventType, RuntimeLoader } from '@rive-app/canvas';
+import { resetRiveRuntimeLifecycleForTests } from '../utils/rive-runtime';
 
 // Mock RiveFile
 jest.mock('@rive-app/canvas', () => ({
@@ -15,6 +16,18 @@ jest.mock('@rive-app/canvas', () => ({
   },
 }));
 
+jest.mock('@rive-app/webgl2', () => ({
+  RuntimeLoader: {
+    awaitInstance: jest.fn(),
+    setWasmUrl: jest.fn(),
+  },
+}));
+
+/** Wait until async loadRiveFile (ensureRiveRuntimeReady + RiveFile outside Angular zone) completes. */
+async function flushLoadMicrotasks(): Promise<void> {
+  await new Promise<void>((resolve) => setTimeout(resolve, 0));
+}
+
 describe('RiveFileService', () => {
   let service: RiveFileService;
   let mockRiveFile: jest.Mocked<RiveFile>;
@@ -22,6 +35,8 @@ describe('RiveFileService', () => {
   let methodCallOrder: string[];
 
   beforeEach(() => {
+    resetRiveRuntimeLifecycleForTests();
+
     eventHandlers = new Map();
     methodCallOrder = [];
 
@@ -62,8 +77,7 @@ describe('RiveFileService', () => {
       const params = { src: 'test.riv' };
       service.loadFile(params);
 
-      // Wait for async loadRiveFile to execute
-      await Promise.resolve();
+      await flushLoadMicrotasks();
 
       // Check order: on(Load) -> on(LoadError) -> init
       const loadIndex = methodCallOrder.indexOf(`on:${EventType.Load}`);
@@ -133,8 +147,7 @@ describe('RiveFileService', () => {
     it('should accept debug parameter but not pass it to RiveFile', async () => {
       const params = { src: 'debug.riv', debug: true };
       service.loadFile(params);
-      await Promise.resolve();
-      await Promise.resolve();
+      await flushLoadMicrotasks();
       // debug should be excluded from SDK params
       expect(RiveFile).toHaveBeenCalledWith({ src: 'debug.riv' });
     });

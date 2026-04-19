@@ -81,4 +81,18 @@ describe('ensureRiveRuntimeReady', () => {
     expect(webgl2AwaitInstance).toHaveBeenCalledTimes(1);
     expect(canvasAwaitInstance).not.toHaveBeenCalled();
   });
+
+  it('combines primary and fallback errors when both runtimes fail', async () => {
+    webgl2AwaitInstance.mockRejectedValueOnce(new Error('primary fail'));
+    canvasAwaitInstance.mockRejectedValueOnce(new Error('fallback fail'));
+    const { ensureRiveRuntimeReady } = await import('./rive-runtime');
+
+    await expect(
+      ensureRiveRuntimeReady({
+        lazy: false,
+        renderer: 'webgl2',
+        strict: false,
+      }),
+    ).rejects.toThrow(/Could not initialize Rive[\s\S]*provideRiveRuntime/);
+  });
 });

@@ -19,7 +19,6 @@ import {
   Fit,
   Alignment,
   EventType,
-  CANVAS_RIVE_SDK,
   DEFAULT_RIVE_RENDERER,
   getFallbackRenderer,
   type Rive,
@@ -30,7 +29,7 @@ import {
   type RiveEvent,
   type ViewModelInstance,
   type RiveSdkModule,
-} from '../utils/rive-sdk';
+} from '../utils';
 import { RiveLoadError } from '../models';
 import type {
   DataBindingValue,
@@ -43,6 +42,7 @@ import {
   RiveLogger,
   RIVE_DEBUG_CONFIG,
   RIVE_RUNTIME_CONFIG,
+  DEFAULT_RIVE_RUNTIME_RESOLVED_CONFIG,
   validateConfiguration,
   validateInput,
   RiveErrorCode,
@@ -305,9 +305,13 @@ export class RiveCanvasComponent implements AfterViewInit {
       const fit = this.fit();
       const alignment = this.alignment();
       untracked(() => {
-        if (this.#rive && isPlatformBrowser(this.#platformId)) {
+        if (
+          this.#rive &&
+          this.#runtimeSdk &&
+          isPlatformBrowser(this.#platformId)
+        ) {
           const layoutParams: LayoutParameters = { fit, alignment };
-          const layoutCtor = (this.#runtimeSdk ?? CANVAS_RIVE_SDK).Layout;
+          const layoutCtor = this.#runtimeSdk.Layout;
           this.#rive.layout = new layoutCtor(layoutParams as never) as never;
         }
       });
@@ -608,12 +612,8 @@ export class RiveCanvasComponent implements AfterViewInit {
           });
         };
 
-        if (!this.#runtimeConfig) {
-          createRiveInstance(CANVAS_RIVE_SDK);
-          return;
-        }
-
-        const runtimeConfig = this.#runtimeConfig;
+        const runtimeConfig =
+          this.#runtimeConfig ?? DEFAULT_RIVE_RUNTIME_RESOLVED_CONFIG;
         const preferredRenderer =
           runtimeConfig.renderer ?? DEFAULT_RIVE_RENDERER;
         const strictMode = runtimeConfig.strict;

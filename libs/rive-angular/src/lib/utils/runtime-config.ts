@@ -33,6 +33,13 @@ export interface RiveRuntimeResolvedConfig {
   strict: boolean;
 }
 
+/** Default runtime options when `provideRiveRuntime` is not used (canvas, non-strict). */
+export const DEFAULT_RIVE_RUNTIME_RESOLVED_CONFIG: RiveRuntimeResolvedConfig = {
+  lazy: false,
+  renderer: DEFAULT_RIVE_RENDERER,
+  strict: false,
+};
+
 /**
  * Internal DI token used by component/service to read runtime options.
  */

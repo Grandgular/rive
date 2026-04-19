@@ -40,7 +40,9 @@ export {
 
 export {
   provideRiveRuntime,
+  DEFAULT_RIVE_RUNTIME_RESOLVED_CONFIG,
   type RiveRuntimeConfig,
+  type RiveRuntimeResolvedConfig,
 } from './lib/utils/runtime-config';
 
 // Color utilities for data binding
@@ -50,14 +52,14 @@ export {
   riveColorToHex,
 } from './lib/utils/color-parser';
 
-// Re-export commonly used types from Rive SDK for convenience
-export {
+// Re-export commonly used Rive SDK-compatible types for convenience
+export type {
   Rive,
   RiveFile,
   Layout,
   StateMachineInput,
   ViewModelInstance,
-  type LayoutParameters,
-  type RiveParameters,
-  type RiveFileParameters,
+  LayoutParameters,
+  RiveParameters,
+  RiveFileParameters,
 } from './lib/utils/rive-sdk';

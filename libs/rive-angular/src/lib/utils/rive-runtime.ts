@@ -1,4 +1,5 @@
 import type { RiveRuntimeResolvedConfig } from './runtime-config';
+import { composeFallbackRiveRuntimeError } from './rive-runtime-errors';
 import {
   DEFAULT_RIVE_RENDERER,
   getFallbackRenderer,
@@ -14,6 +15,11 @@ interface RuntimeState {
 }
 
 const runtimeStates = new Map<RiveRenderer, RuntimeState>();
+
+/** Clears WASM init state (for unit tests; each test needs a fresh RuntimeLoader path). */
+export function resetRiveRuntimeLifecycleForTests(): void {
+  runtimeStates.clear();
+}
 
 function getRuntimeState(renderer: RiveRenderer): RuntimeState {
   const existing = runtimeStates.get(renderer);
@@ -94,6 +100,15 @@ export async function ensureRiveRuntimeReady(
     }
 
     const fallbackRenderer = getFallbackRenderer(preferredRenderer);
-    return ensureRuntimeForRenderer(fallbackRenderer, config);
+    try {
+      return await ensureRuntimeForRenderer(fallbackRenderer, config);
+    } catch (fallbackError) {
+      throw composeFallbackRiveRuntimeError(
+        preferredRenderer,
+        fallbackRenderer,
+        primaryError,
+        fallbackError,
+      );
+    }
   }
 }

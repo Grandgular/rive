@@ -9,6 +9,7 @@ import {
   LoopType,
   type RiveParameters,
 } from '@rive-app/canvas';
+import { resetRiveRuntimeLifecycleForTests } from '../utils/rive-runtime';
 
 // Mock Rive
 jest.mock('@rive-app/canvas', () => ({
@@ -58,6 +59,13 @@ jest.mock('@rive-app/canvas', () => ({
   },
 }));
 
+jest.mock('@rive-app/webgl2', () => ({
+  RuntimeLoader: {
+    awaitInstance: jest.fn().mockResolvedValue(undefined),
+    setWasmUrl: jest.fn(),
+  },
+}));
+
 // Mock IntersectionObserver
 class MockIntersectionObserver {
   observe = jest.fn();
@@ -75,6 +83,18 @@ class MockResizeObserver {
 }
 
 global.ResizeObserver = MockResizeObserver as any;
+
+/**
+ * After `ensureRiveRuntimeReady`, Rive is created on a microtask outside the Angular zone.
+ * `fixture.whenStable()` does not wait for that in zoneless tests; a macrotask flush does.
+ */
+async function detectChangesAndSettle(
+  fixture: ComponentFixture<RiveCanvasComponent>,
+): Promise<void> {
+  fixture.detectChanges();
+  await fixture.whenStable();
+  await new Promise<void>((resolve) => setTimeout(resolve, 0));
+}
 
 describe('RiveCanvasComponent', () => {
   let component: RiveCanvasComponent;
@@ -214,6 +234,8 @@ describe('RiveCanvasComponent', () => {
   };
 
   beforeEach(async () => {
+    resetRiveRuntimeLifecycleForTests();
+
     mockRive = {
       cleanup: jest.fn(),
       play: jest.fn(),
@@ -273,9 +295,9 @@ describe('RiveCanvasComponent', () => {
     expect(component.automaticallyHandleEvents()).toBe(false);
   });
 
-  it('should load animation from src after view init', () => {
+  it('should load animation from src after view init', async () => {
     fixture.componentRef.setInput('src', 'test.riv');
-    fixture.detectChanges();
+    await detectChangesAndSettle(fixture);
 
     expect(Rive).toHaveBeenCalledWith(
       expect.objectContaining({
@@ -285,7 +307,7 @@ describe('RiveCanvasComponent', () => {
     );
   });
 
-  it('should emit loaded event on successful load', (done) => {
+  it('should emit loaded event on successful load', async () => {
     let onLoadCallback: (() => void) | undefined;
 
     (Rive as jest.MockedClass<typeof Rive>).mockImplementation(
@@ -301,22 +323,23 @@ describe('RiveCanvasComponent', () => {
     component.loaded.subscribe(() => {
       loadedEmitted = true;
       expect(component.isLoaded()).toBe(true);
-      if (loadedEmitted && riveReadyEmitted) done();
     });
 
     component.riveReady.subscribe(() => {
       riveReadyEmitted = true;
       expect(component.riveInstance()).toBe(mockRive);
-      if (loadedEmitted && riveReadyEmitted) done();
     });
 
     fixture.componentRef.setInput('src', 'test.riv');
-    fixture.detectChanges();
+    await detectChangesAndSettle(fixture);
 
     onLoadCallback!();
+    await new Promise<void>((resolve) => setTimeout(resolve, 0));
+    expect(loadedEmitted).toBe(true);
+    expect(riveReadyEmitted).toBe(true);
   });
 
-  it('should emit loadError event on load failure', (done) => {
+  it('should emit loadError event on load failure', async () => {
     let onLoadErrorCallback: (() => void) | undefined;
 
     (Rive as jest.MockedClass<typeof Rive>).mockImplementation(
@@ -326,47 +349,48 @@ describe('RiveCanvasComponent', () => {
       },
     );
 
-    component.loadError.subscribe((error) => {
-      expect(error).toBeDefined();
-      expect(error.name).toBe('RiveLoadError');
-      done();
+    const errorPromise = new Promise<unknown>((resolve) => {
+      component.loadError.subscribe((error) => resolve(error));
     });
 
     fixture.componentRef.setInput('src', 'test.riv');
-    fixture.detectChanges();
+    await detectChangesAndSettle(fixture);
 
     onLoadErrorCallback!();
+    const error = await errorPromise;
+    expect(error).toBeDefined();
+    expect((error as Error).name).toBe('RiveLoadError');
   });
 
-  it('should cleanup Rive instance on destroy', () => {
+  it('should cleanup Rive instance on destroy', async () => {
     fixture.componentRef.setInput('src', 'test.riv');
-    fixture.detectChanges();
+    await detectChangesAndSettle(fixture);
 
     fixture.destroy();
 
     expect(mockRive.cleanup).toHaveBeenCalled();
   });
 
-  it('should reload animation when src changes', () => {
+  it('should reload animation when src changes', async () => {
     fixture.componentRef.setInput('src', 'test1.riv');
-    fixture.detectChanges();
+    await detectChangesAndSettle(fixture);
 
     expect(Rive).toHaveBeenCalledTimes(1);
 
     fixture.componentRef.setInput('src', 'test2.riv');
-    fixture.detectChanges();
+    await detectChangesAndSettle(fixture);
 
     expect(Rive).toHaveBeenCalledTimes(2);
     expect(mockRive.cleanup).toHaveBeenCalledTimes(1);
   });
 
-  it('should prioritize riveFile over src and buffer', () => {
+  it('should prioritize riveFile over src and buffer', async () => {
     const mockRiveFile = {} as RiveFile;
 
     fixture.componentRef.setInput('src', 'test.riv');
     fixture.componentRef.setInput('buffer', new ArrayBuffer(100));
     fixture.componentRef.setInput('riveFile', mockRiveFile);
-    fixture.detectChanges();
+    await detectChangesAndSettle(fixture);
 
     expect(Rive).toHaveBeenCalledWith(
       expect.objectContaining({
@@ -382,9 +406,9 @@ describe('RiveCanvasComponent', () => {
   });
 
   describe('Public API methods', () => {
-    beforeEach(() => {
+    beforeEach(async () => {
       fixture.componentRef.setInput('src', 'test.riv');
-      fixture.detectChanges();
+      await detectChangesAndSettle(fixture);
     });
 
     it('should play animation', () => {
@@ -434,7 +458,7 @@ describe('RiveCanvasComponent', () => {
   });
 
   describe('Signals', () => {
-    it('should update isPlaying signal on play', (done) => {
+    it('should update isPlaying signal on play', async () => {
       let onPlayCallback: (() => void) | undefined;
 
       (Rive as jest.MockedClass<typeof Rive>).mockImplementation(
@@ -445,18 +469,16 @@ describe('RiveCanvasComponent', () => {
       );
 
       fixture.componentRef.setInput('src', 'test.riv');
-      fixture.detectChanges();
+      await detectChangesAndSettle(fixture);
 
       onPlayCallback!();
 
-      setTimeout(() => {
-        expect(component.isPlaying()).toBe(true);
-        expect(component.isPaused()).toBe(false);
-        done();
-      }, 0);
+      await new Promise<void>((resolve) => setTimeout(resolve, 0));
+      expect(component.isPlaying()).toBe(true);
+      expect(component.isPaused()).toBe(false);
     });
 
-    it('should update isPaused signal on pause', (done) => {
+    it('should update isPaused signal on pause', async () => {
       let onPauseCallback: (() => void) | undefined;
 
       (Rive as jest.MockedClass<typeof Rive>).mockImplementation(
@@ -467,18 +489,16 @@ describe('RiveCanvasComponent', () => {
       );
 
       fixture.componentRef.setInput('src', 'test.riv');
-      fixture.detectChanges();
+      await detectChangesAndSettle(fixture);
 
       onPauseCallback!();
 
-      setTimeout(() => {
-        expect(component.isPaused()).toBe(true);
-        expect(component.isPlaying()).toBe(false);
-        done();
-      }, 0);
+      await new Promise<void>((resolve) => setTimeout(resolve, 0));
+      expect(component.isPaused()).toBe(true);
+      expect(component.isPlaying()).toBe(false);
     });
 
-    it('should expose riveInstance signal after load', (done) => {
+    it('should expose riveInstance signal after load', async () => {
       let onLoadCallback: (() => void) | undefined;
 
       (Rive as jest.MockedClass<typeof Rive>).mockImplementation(
@@ -489,27 +509,21 @@ describe('RiveCanvasComponent', () => {
       );
 
       fixture.componentRef.setInput('src', 'test.riv');
-      fixture.detectChanges();
+      await detectChangesAndSettle(fixture);
 
-      // Before load, instance is set but not ready
-      setTimeout(() => {
-        expect(component.riveInstance()).toBe(mockRive);
-        
-        // After load, riveReady should emit
-        component.riveReady.subscribe((rive) => {
-          expect(rive).toBe(mockRive);
-          done();
-        });
-
-        onLoadCallback!();
-      }, 0);
+      const ready = new Promise<void>((resolve) => {
+        component.riveReady.subscribe(() => resolve());
+      });
+      onLoadCallback!();
+      await ready;
+      expect(component.riveInstance()).toBe(mockRive);
     });
   });
 
   describe('Animation lifecycle events', () => {
-    it('should pass onLoop and onAdvance callbacks to Rive', () => {
+    it('should pass onLoop and onAdvance callbacks to Rive', async () => {
       fixture.componentRef.setInput('src', 'test.riv');
-      fixture.detectChanges();
+      await detectChangesAndSettle(fixture);
 
       expect(Rive).toHaveBeenCalledWith(
         expect.objectContaining({
@@ -519,7 +533,7 @@ describe('RiveCanvasComponent', () => {
       );
     });
 
-    it('should emit animationPlay and keep isPlaying in sync', (done) => {
+    it('should emit animationPlay and keep isPlaying in sync', async () => {
       let onPlayCallback: RiveParameters['onPlay'];
 
       (Rive as jest.MockedClass<typeof Rive>).mockImplementation(
@@ -533,19 +547,17 @@ describe('RiveCanvasComponent', () => {
       component.animationPlay.subscribe(playSpy);
 
       fixture.componentRef.setInput('src', 'test.riv');
-      fixture.detectChanges();
+      await detectChangesAndSettle(fixture);
 
       onPlayCallback?.({ type: EventType.Play });
 
-      setTimeout(() => {
-        expect(playSpy).toHaveBeenCalledWith({ type: EventType.Play });
-        expect(component.isPlaying()).toBe(true);
-        expect(component.isPaused()).toBe(false);
-        done();
-      }, 0);
+      await new Promise<void>((resolve) => setTimeout(resolve, 0));
+      expect(playSpy).toHaveBeenCalledWith({ type: EventType.Play });
+      expect(component.isPlaying()).toBe(true);
+      expect(component.isPaused()).toBe(false);
     });
 
-    it('should emit animationPause and keep isPaused in sync', (done) => {
+    it('should emit animationPause and keep isPaused in sync', async () => {
       let onPauseCallback: RiveParameters['onPause'];
 
       (Rive as jest.MockedClass<typeof Rive>).mockImplementation(
@@ -559,19 +571,17 @@ describe('RiveCanvasComponent', () => {
       component.animationPause.subscribe(pauseSpy);
 
       fixture.componentRef.setInput('src', 'test.riv');
-      fixture.detectChanges();
+      await detectChangesAndSettle(fixture);
 
       onPauseCallback?.({ type: EventType.Pause });
 
-      setTimeout(() => {
-        expect(pauseSpy).toHaveBeenCalledWith({ type: EventType.Pause });
-        expect(component.isPaused()).toBe(true);
-        expect(component.isPlaying()).toBe(false);
-        done();
-      }, 0);
+      await new Promise<void>((resolve) => setTimeout(resolve, 0));
+      expect(pauseSpy).toHaveBeenCalledWith({ type: EventType.Pause });
+      expect(component.isPaused()).toBe(true);
+      expect(component.isPlaying()).toBe(false);
     });
 
-    it('should emit animationStop and reset playing state', (done) => {
+    it('should emit animationStop and reset playing state', async () => {
       let onStopCallback: RiveParameters['onStop'];
 
       (Rive as jest.MockedClass<typeof Rive>).mockImplementation(
@@ -585,19 +595,17 @@ describe('RiveCanvasComponent', () => {
       component.animationStop.subscribe(stopSpy);
 
       fixture.componentRef.setInput('src', 'test.riv');
-      fixture.detectChanges();
+      await detectChangesAndSettle(fixture);
 
       onStopCallback?.({ type: EventType.Stop });
 
-      setTimeout(() => {
-        expect(stopSpy).toHaveBeenCalledWith({ type: EventType.Stop });
-        expect(component.isPlaying()).toBe(false);
-        expect(component.isPaused()).toBe(false);
-        done();
-      }, 0);
+      await new Promise<void>((resolve) => setTimeout(resolve, 0));
+      expect(stopSpy).toHaveBeenCalledWith({ type: EventType.Stop });
+      expect(component.isPlaying()).toBe(false);
+      expect(component.isPaused()).toBe(false);
     });
 
-    it('should emit animationLoop with loop event data', (done) => {
+    it('should emit animationLoop with loop event data', async () => {
       let onLoopCallback: RiveParameters['onLoop'];
 
       (Rive as jest.MockedClass<typeof Rive>).mockImplementation(
@@ -611,7 +619,7 @@ describe('RiveCanvasComponent', () => {
       component.animationLoop.subscribe(loopSpy);
 
       fixture.componentRef.setInput('src', 'test.riv');
-      fixture.detectChanges();
+      await detectChangesAndSettle(fixture);
 
       const loopPayload = {
         type: EventType.Loop,
@@ -619,13 +627,11 @@ describe('RiveCanvasComponent', () => {
       };
       onLoopCallback?.(loopPayload);
 
-      setTimeout(() => {
-        expect(loopSpy).toHaveBeenCalledWith(loopPayload);
-        done();
-      }, 0);
+      await new Promise<void>((resolve) => setTimeout(resolve, 0));
+      expect(loopSpy).toHaveBeenCalledWith(loopPayload);
     });
 
-    it('should emit animationAdvance when Rive advances a frame', (done) => {
+    it('should emit animationAdvance when Rive advances a frame', async () => {
       let onAdvanceCallback: RiveParameters['onAdvance'];
 
       (Rive as jest.MockedClass<typeof Rive>).mockImplementation(
@@ -639,23 +645,21 @@ describe('RiveCanvasComponent', () => {
       component.animationAdvance.subscribe(advanceSpy);
 
       fixture.componentRef.setInput('src', 'test.riv');
-      fixture.detectChanges();
+      await detectChangesAndSettle(fixture);
 
       const advancePayload = { type: EventType.Advance };
       onAdvanceCallback?.(advancePayload);
 
-      setTimeout(() => {
-        expect(advanceSpy).toHaveBeenCalledWith(advancePayload);
-        done();
-      }, 0);
+      await new Promise<void>((resolve) => setTimeout(resolve, 0));
+      expect(advanceSpy).toHaveBeenCalledWith(advancePayload);
     });
   });
 
   describe('Configuration', () => {
-    it('should pass artboard to Rive config', () => {
+    it('should pass artboard to Rive config', async () => {
       fixture.componentRef.setInput('src', 'test.riv');
       fixture.componentRef.setInput('artboard', 'MyArtboard');
-      fixture.detectChanges();
+      await detectChangesAndSettle(fixture);
 
       expect(Rive).toHaveBeenCalledWith(
         expect.objectContaining({
@@ -664,10 +668,10 @@ describe('RiveCanvasComponent', () => {
       );
     });
 
-    it('should pass animations to Rive config', () => {
+    it('should pass animations to Rive config', async () => {
       fixture.componentRef.setInput('src', 'test.riv');
       fixture.componentRef.setInput('animations', ['anim1', 'anim2']);
-      fixture.detectChanges();
+      await detectChangesAndSettle(fixture);
 
       expect(Rive).toHaveBeenCalledWith(
         expect.objectContaining({
@@ -676,10 +680,10 @@ describe('RiveCanvasComponent', () => {
       );
     });
 
-    it('should pass stateMachines to Rive config', () => {
+    it('should pass stateMachines to Rive config', async () => {
       fixture.componentRef.setInput('src', 'test.riv');
       fixture.componentRef.setInput('stateMachines', 'StateMachine1');
-      fixture.detectChanges();
+      await detectChangesAndSettle(fixture);
 
       expect(Rive).toHaveBeenCalledWith(
         expect.objectContaining({
@@ -688,11 +692,11 @@ describe('RiveCanvasComponent', () => {
       );
     });
 
-    it('should pass fit and alignment to Rive config', () => {
+    it('should pass fit and alignment to Rive config', async () => {
       fixture.componentRef.setInput('src', 'test.riv');
       fixture.componentRef.setInput('fit', Fit.Cover);
       fixture.componentRef.setInput('alignment', Alignment.TopLeft);
-      fixture.detectChanges();
+      await detectChangesAndSettle(fixture);
 
       expect(Rive).toHaveBeenCalledWith(
         expect.objectContaining({
@@ -703,9 +707,9 @@ describe('RiveCanvasComponent', () => {
   });
 
   describe('Phase 2: Debug Mode', () => {
-    it('should use debug level when debugMode is true', () => {
+    it('should use debug level when debugMode is true', async () => {
       fixture.componentRef.setInput('debugMode', true);
-      fixture.detectChanges();
+      await detectChangesAndSettle(fixture);
 
       // Logger should be initialized with debug level
       // We can verify this by checking console output in integration tests
@@ -717,23 +721,21 @@ describe('RiveCanvasComponent', () => {
       expect(component.debugMode()).toBeUndefined();
     });
 
-    it('should update logger level when debugMode changes', (done) => {
+    it('should update logger level when debugMode changes', async () => {
       fixture.componentRef.setInput('src', 'test.riv');
       fixture.componentRef.setInput('debugMode', false);
-      fixture.detectChanges();
+      await detectChangesAndSettle(fixture);
 
-      setTimeout(() => {
-        fixture.componentRef.setInput('debugMode', true);
-        fixture.detectChanges();
+      await new Promise<void>((r) => setTimeout(r, 0));
+      fixture.componentRef.setInput('debugMode', true);
+      await detectChangesAndSettle(fixture);
 
-        expect(component.debugMode()).toBe(true);
-        done();
-      }, 0);
+      expect(component.debugMode()).toBe(true);
     });
   });
 
   describe('Phase 2: Validation', () => {
-    it('should emit RiveValidationError for invalid artboard name', (done) => {
+    it('should emit RiveValidationError for invalid artboard name', async () => {
       let onLoadCallback: (() => void) | undefined;
 
       const mockRiveWithArtboards = {
@@ -755,21 +757,18 @@ describe('RiveCanvasComponent', () => {
 
       fixture.componentRef.setInput('src', 'test.riv');
       fixture.componentRef.setInput('artboard', 'InvalidArtboard');
-      fixture.detectChanges();
+      await detectChangesAndSettle(fixture);
 
       onLoadCallback!();
-
-      setTimeout(() => {
-        expect(errors.length).toBeGreaterThan(0);
-        const validationError = errors.find(
-          (e) => e.name === 'RiveValidationError',
-        );
-        expect(validationError).toBeDefined();
-        done();
-      }, 0);
+      await new Promise<void>((r) => setTimeout(r, 0));
+      expect(errors.length).toBeGreaterThan(0);
+      const validationError = errors.find(
+        (e) => e.name === 'RiveValidationError',
+      );
+      expect(validationError).toBeDefined();
     });
 
-    it('should emit RiveValidationError for invalid animation name', (done) => {
+    it('should emit RiveValidationError for invalid animation name', async () => {
       let onLoadCallback: (() => void) | undefined;
 
       const mockRiveWithAnimations = {
@@ -791,21 +790,18 @@ describe('RiveCanvasComponent', () => {
 
       fixture.componentRef.setInput('src', 'test.riv');
       fixture.componentRef.setInput('animations', 'InvalidAnimation');
-      fixture.detectChanges();
+      await detectChangesAndSettle(fixture);
 
       onLoadCallback!();
-
-      setTimeout(() => {
-        expect(errors.length).toBeGreaterThan(0);
-        const validationError = errors.find(
-          (e) => e.name === 'RiveValidationError',
-        );
-        expect(validationError).toBeDefined();
-        done();
-      }, 0);
+      await new Promise<void>((r) => setTimeout(r, 0));
+      expect(errors.length).toBeGreaterThan(0);
+      const validationError = errors.find(
+        (e) => e.name === 'RiveValidationError',
+      );
+      expect(validationError).toBeDefined();
     });
 
-    it('should emit RiveValidationError for invalid state machine name', (done) => {
+    it('should emit RiveValidationError for invalid state machine name', async () => {
       let onLoadCallback: (() => void) | undefined;
 
       const mockRiveWithStateMachines = {
@@ -827,21 +823,18 @@ describe('RiveCanvasComponent', () => {
 
       fixture.componentRef.setInput('src', 'test.riv');
       fixture.componentRef.setInput('stateMachines', 'InvalidSM');
-      fixture.detectChanges();
+      await detectChangesAndSettle(fixture);
 
       onLoadCallback!();
-
-      setTimeout(() => {
-        expect(errors.length).toBeGreaterThan(0);
-        const validationError = errors.find(
-          (e) => e.name === 'RiveValidationError',
-        );
-        expect(validationError).toBeDefined();
-        done();
-      }, 0);
+      await new Promise<void>((r) => setTimeout(r, 0));
+      expect(errors.length).toBeGreaterThan(0);
+      const validationError = errors.find(
+        (e) => e.name === 'RiveValidationError',
+      );
+      expect(validationError).toBeDefined();
     });
 
-    it('should emit RiveValidationError with RIVE_204 for invalid input', (done) => {
+    it('should emit RiveValidationError with RIVE_204 for invalid input', async () => {
       let onLoadCallback: (() => void) | undefined;
 
       mockRive.stateMachineInputs.mockReturnValue([
@@ -861,24 +854,19 @@ describe('RiveCanvasComponent', () => {
       });
 
       fixture.componentRef.setInput('src', 'test.riv');
-      fixture.detectChanges();
+      await detectChangesAndSettle(fixture);
 
       onLoadCallback!();
-
-      setTimeout(() => {
-        component.setInput('StateMachine', 'invalidInput', 42);
-
-        setTimeout(() => {
-          const validationError = errors.find(
-            (e) => e.name === 'RiveValidationError',
-          );
-          expect(validationError).toBeDefined();
-          done();
-        }, 0);
-      }, 0);
+      await new Promise<void>((r) => setTimeout(r, 0));
+      component.setInput('StateMachine', 'invalidInput', 42);
+      await new Promise<void>((r) => setTimeout(r, 0));
+      const validationError = errors.find(
+        (e) => e.name === 'RiveValidationError',
+      );
+      expect(validationError).toBeDefined();
     });
 
-    it('should emit RiveValidationError with RIVE_204 for invalid trigger', (done) => {
+    it('should emit RiveValidationError with RIVE_204 for invalid trigger', async () => {
       let onLoadCallback: (() => void) | undefined;
 
       mockRive.stateMachineInputs.mockReturnValue([
@@ -898,24 +886,19 @@ describe('RiveCanvasComponent', () => {
       });
 
       fixture.componentRef.setInput('src', 'test.riv');
-      fixture.detectChanges();
+      await detectChangesAndSettle(fixture);
 
       onLoadCallback!();
-
-      setTimeout(() => {
-        component.fireTrigger('StateMachine', 'invalidTrigger');
-
-        setTimeout(() => {
-          const validationError = errors.find(
-            (e) => e.name === 'RiveValidationError',
-          );
-          expect(validationError).toBeDefined();
-          done();
-        }, 0);
-      }, 0);
+      await new Promise<void>((r) => setTimeout(r, 0));
+      component.fireTrigger('StateMachine', 'invalidTrigger');
+      await new Promise<void>((r) => setTimeout(r, 0));
+      const validationError = errors.find(
+        (e) => e.name === 'RiveValidationError',
+      );
+      expect(validationError).toBeDefined();
     });
 
-    it('should not crash when runtime metadata is unavailable', (done) => {
+    it('should not crash when runtime metadata is unavailable', async () => {
       let onLoadCallback: (() => void) | undefined;
 
       // Mock Rive instance without metadata properties
@@ -935,15 +918,11 @@ describe('RiveCanvasComponent', () => {
 
       fixture.componentRef.setInput('src', 'test.riv');
       fixture.componentRef.setInput('artboard', 'SomeArtboard');
-      fixture.detectChanges();
+      await detectChangesAndSettle(fixture);
 
       onLoadCallback!();
-
-      setTimeout(() => {
-        // Should complete without throwing
-        expect(component.isLoaded()).toBe(true);
-        done();
-      }, 0);
+      await new Promise<void>((r) => setTimeout(r, 0));
+      expect(component.isLoaded()).toBe(true);
     });
   });
 
@@ -958,7 +937,7 @@ describe('RiveCanvasComponent', () => {
     });
 
     describe('textRuns input (controlled keys)', () => {
-      it('should apply text runs after load', (done) => {
+      it('should apply text runs after load', async () => {
         let onLoadCallback: (() => void) | undefined;
 
         (Rive as jest.MockedClass<typeof Rive>).mockImplementation(
@@ -973,24 +952,21 @@ describe('RiveCanvasComponent', () => {
           title: 'Hello',
           subtitle: 'World',
         });
-        fixture.detectChanges();
+        await detectChangesAndSettle(fixture);
 
         onLoadCallback!();
-
-        setTimeout(() => {
-          expect(mockRive.setTextRunValue).toHaveBeenCalledWith(
-            'title',
-            'Hello',
-          );
-          expect(mockRive.setTextRunValue).toHaveBeenCalledWith(
-            'subtitle',
-            'World',
-          );
-          done();
-        }, 0);
+        await new Promise<void>((r) => setTimeout(r, 0));
+        expect(mockRive.setTextRunValue).toHaveBeenCalledWith(
+          'title',
+          'Hello',
+        );
+        expect(mockRive.setTextRunValue).toHaveBeenCalledWith(
+          'subtitle',
+          'World',
+        );
       });
 
-      it('should reactively update when textRuns values change', (done) => {
+      it('should reactively update when textRuns values change', async () => {
         let onLoadCallback: (() => void) | undefined;
 
         (Rive as jest.MockedClass<typeof Rive>).mockImplementation(
@@ -1002,32 +978,26 @@ describe('RiveCanvasComponent', () => {
 
         fixture.componentRef.setInput('src', 'test.riv');
         fixture.componentRef.setInput('textRuns', { title: 'Hello' });
-        fixture.detectChanges();
+        await detectChangesAndSettle(fixture);
 
         onLoadCallback!();
+        await new Promise<void>((r) => setTimeout(r, 0));
+        expect(mockRive.setTextRunValue).toHaveBeenCalledWith(
+          'title',
+          'Hello',
+        );
 
-        setTimeout(() => {
-          expect(mockRive.setTextRunValue).toHaveBeenCalledWith(
-            'title',
-            'Hello',
-          );
+        jest.clearAllMocks();
+        fixture.componentRef.setInput('textRuns', { title: 'Updated' });
+        await detectChangesAndSettle(fixture);
 
-          // Clear mock and update input
-          jest.clearAllMocks();
-          fixture.componentRef.setInput('textRuns', { title: 'Updated' });
-          fixture.detectChanges();
-
-          setTimeout(() => {
-            expect(mockRive.setTextRunValue).toHaveBeenCalledWith(
-              'title',
-              'Updated',
-            );
-            done();
-          }, 0);
-        }, 0);
+        expect(mockRive.setTextRunValue).toHaveBeenCalledWith(
+          'title',
+          'Updated',
+        );
       });
 
-      it('should emit error for non-existent text run', (done) => {
+      it('should emit error for non-existent text run', async () => {
         let onLoadCallback: (() => void) | undefined;
 
         mockRive.setTextRunValue = jest.fn((textRunName: string, textRunValue: string) => {
@@ -1048,20 +1018,17 @@ describe('RiveCanvasComponent', () => {
 
         fixture.componentRef.setInput('src', 'test.riv');
         fixture.componentRef.setInput('textRuns', { invalid: 'value' });
-        fixture.detectChanges();
+        await detectChangesAndSettle(fixture);
 
         onLoadCallback!();
-
-        setTimeout(() => {
-          const validationError = errors.find(
-            (e) => e.name === 'RiveValidationError',
-          );
-          expect(validationError).toBeDefined();
-          done();
-        }, 0);
+        await new Promise<void>((r) => setTimeout(r, 0));
+        const validationError = errors.find(
+          (e) => e.name === 'RiveValidationError',
+        );
+        expect(validationError).toBeDefined();
       });
 
-      it('should make key uncontrolled when removed from input', (done) => {
+      it('should make key uncontrolled when removed from input', async () => {
         let onLoadCallback: (() => void) | undefined;
 
         (Rive as jest.MockedClass<typeof Rive>).mockImplementation(
@@ -1076,45 +1043,38 @@ describe('RiveCanvasComponent', () => {
           title: 'Hello',
           subtitle: 'World',
         });
-        fixture.detectChanges();
+        await detectChangesAndSettle(fixture);
 
         onLoadCallback!();
+        await new Promise<void>((r) => setTimeout(r, 0));
+        expect(mockRive.setTextRunValue).toHaveBeenCalledWith(
+          'title',
+          'Hello',
+        );
+        expect(mockRive.setTextRunValue).toHaveBeenCalledWith(
+          'subtitle',
+          'World',
+        );
 
-        setTimeout(() => {
-          expect(mockRive.setTextRunValue).toHaveBeenCalledWith(
-            'title',
-            'Hello',
-          );
-          expect(mockRive.setTextRunValue).toHaveBeenCalledWith(
-            'subtitle',
-            'World',
-          );
+        jest.clearAllMocks();
+        fixture.componentRef.setInput('textRuns', { title: 'Hello' });
+        await detectChangesAndSettle(fixture);
 
-          // Remove subtitle from input
-          jest.clearAllMocks();
-          fixture.componentRef.setInput('textRuns', { title: 'Hello' });
-          fixture.detectChanges();
-
-          setTimeout(() => {
-            // Only title should be set now
-            expect(mockRive.setTextRunValue).toHaveBeenCalledWith(
-              'title',
-              'Hello',
-            );
-            expect(mockRive.setTextRunValue).not.toHaveBeenCalledWith(
-              'subtitle',
-              expect.anything(),
-            );
-            done();
-          }, 0);
-        }, 0);
+        expect(mockRive.setTextRunValue).toHaveBeenCalledWith(
+          'title',
+          'Hello',
+        );
+        expect(mockRive.setTextRunValue).not.toHaveBeenCalledWith(
+          'subtitle',
+          expect.anything(),
+        );
       });
     });
 
     describe('Imperative methods', () => {
-      beforeEach(() => {
+      beforeEach(async () => {
         fixture.componentRef.setInput('src', 'test.riv');
-        fixture.detectChanges();
+        await detectChangesAndSettle(fixture);
       });
 
       it('should get text run value', () => {
@@ -1181,119 +1141,95 @@ describe('RiveCanvasComponent', () => {
         );
       });
 
-      it('scenario 1: controlled key + imperative call -> input wins', (done) => {
+      it('scenario 1: controlled key + imperative call -> input wins', async () => {
         fixture.componentRef.setInput('src', 'test.riv');
         fixture.componentRef.setInput('textRuns', { title: 'Hello' });
-        fixture.detectChanges();
+        await detectChangesAndSettle(fixture);
 
         onLoadCallback!();
+        await new Promise<void>((r) => setTimeout(r, 0));
+        expect(mockRive.setTextRunValue).toHaveBeenCalledWith(
+          'title',
+          'Hello',
+        );
 
-        setTimeout(() => {
-          expect(mockRive.setTextRunValue).toHaveBeenCalledWith(
-            'title',
-            'Hello',
-          );
+        jest.clearAllMocks();
+        component.setTextRunValue('title', 'World');
+        await new Promise<void>((r) => setTimeout(r, 0));
+        expect(mockRive.setTextRunValue).toHaveBeenCalledWith(
+          'title',
+          'World',
+        );
 
-          // Imperative call on controlled key
-          jest.clearAllMocks();
-          component.setTextRunValue('title', 'World');
+        jest.clearAllMocks();
+        fixture.componentRef.setInput('textRuns', { title: 'Hello' });
+        await detectChangesAndSettle(fixture);
 
-          setTimeout(() => {
-            expect(mockRive.setTextRunValue).toHaveBeenCalledWith(
-              'title',
-              'World',
-            );
-
-            // Input updates with same value - should reapply
-            jest.clearAllMocks();
-            fixture.componentRef.setInput('textRuns', { title: 'Hello' });
-            fixture.detectChanges();
-
-            setTimeout(() => {
-              expect(mockRive.setTextRunValue).toHaveBeenCalledWith(
-                'title',
-                'Hello',
-              );
-              done();
-            }, 0);
-          }, 0);
-        }, 0);
+        expect(mockRive.setTextRunValue).toHaveBeenCalledWith(
+          'title',
+          'Hello',
+        );
       });
 
-      it('scenario 2: controlled key changes value', (done) => {
+      it('scenario 2: controlled key changes value', async () => {
         fixture.componentRef.setInput('src', 'test.riv');
         fixture.componentRef.setInput('textRuns', { title: 'Hello' });
-        fixture.detectChanges();
+        await detectChangesAndSettle(fixture);
 
         onLoadCallback!();
+        await new Promise<void>((r) => setTimeout(r, 0));
+        expect(mockRive.setTextRunValue).toHaveBeenCalledWith(
+          'title',
+          'Hello',
+        );
 
-        setTimeout(() => {
-          expect(mockRive.setTextRunValue).toHaveBeenCalledWith(
-            'title',
-            'Hello',
-          );
+        jest.clearAllMocks();
+        fixture.componentRef.setInput('textRuns', { title: 'Updated' });
+        await detectChangesAndSettle(fixture);
 
-          // Input changes
-          jest.clearAllMocks();
-          fixture.componentRef.setInput('textRuns', { title: 'Updated' });
-          fixture.detectChanges();
-
-          setTimeout(() => {
-            expect(mockRive.setTextRunValue).toHaveBeenCalledWith(
-              'title',
-              'Updated',
-            );
-            done();
-          }, 0);
-        }, 0);
+        expect(mockRive.setTextRunValue).toHaveBeenCalledWith(
+          'title',
+          'Updated',
+        );
       });
 
-      it('scenario 3: uncontrolled key + imperative call -> both preserved', (done) => {
+      it('scenario 3: uncontrolled key + imperative call -> both preserved', async () => {
         fixture.componentRef.setInput('src', 'test.riv');
         fixture.componentRef.setInput('textRuns', { title: 'Hello' });
-        fixture.detectChanges();
+        await detectChangesAndSettle(fixture);
 
         onLoadCallback!();
+        await new Promise<void>((r) => setTimeout(r, 0));
+        expect(mockRive.setTextRunValue).toHaveBeenCalledWith(
+          'title',
+          'Hello',
+        );
 
-        setTimeout(() => {
-          expect(mockRive.setTextRunValue).toHaveBeenCalledWith(
-            'title',
-            'Hello',
-          );
+        jest.clearAllMocks();
+        component.setTextRunValue('subtitle', 'World');
+        await new Promise<void>((r) => setTimeout(r, 0));
+        expect(mockRive.setTextRunValue).toHaveBeenCalledWith(
+          'subtitle',
+          'World',
+        );
 
-          // Imperative call on uncontrolled key
-          jest.clearAllMocks();
-          component.setTextRunValue('subtitle', 'World');
+        jest.clearAllMocks();
+        fixture.componentRef.setInput('textRuns', { title: 'Hello' });
+        await detectChangesAndSettle(fixture);
 
-          setTimeout(() => {
-            expect(mockRive.setTextRunValue).toHaveBeenCalledWith(
-              'subtitle',
-              'World',
-            );
-
-            // Input updates - should only set controlled key
-            jest.clearAllMocks();
-            fixture.componentRef.setInput('textRuns', { title: 'Hello' });
-            fixture.detectChanges();
-
-            setTimeout(() => {
-              expect(mockRive.setTextRunValue).toHaveBeenCalledWith(
-                'title',
-                'Hello',
-              );
-              expect(mockRive.setTextRunValue).not.toHaveBeenCalledWith(
-                'subtitle',
-                expect.anything(),
-              );
-              done();
-            }, 0);
-          }, 0);
-        }, 0);
+        expect(mockRive.setTextRunValue).toHaveBeenCalledWith(
+          'title',
+          'Hello',
+        );
+        expect(mockRive.setTextRunValue).not.toHaveBeenCalledWith(
+          'subtitle',
+          expect.anything(),
+        );
       });
     });
 
     describe('Warning logging', () => {
-      it('should log warning when setting controlled key imperatively', (done) => {
+      it('should log warning when setting controlled key imperatively', async () => {
         let onLoadCallback: (() => void) | undefined;
 
         (Rive as jest.MockedClass<typeof Rive>).mockImplementation(
@@ -1308,22 +1244,16 @@ describe('RiveCanvasComponent', () => {
         fixture.componentRef.setInput('src', 'test.riv');
         fixture.componentRef.setInput('textRuns', { title: 'Hello' });
         fixture.componentRef.setInput('debugMode', true); // Enable debug logging to see warnings
-        fixture.detectChanges();
+        await detectChangesAndSettle(fixture);
 
         onLoadCallback!();
+        await new Promise<void>((r) => setTimeout(r, 0));
+        component.setTextRunValue('title', 'World');
 
-        // Wait for the component to be fully loaded
-        setTimeout(() => {
-          // Call setTextRunValue - this should log a warning immediately
-          component.setTextRunValue('title', 'World');
-
-          // Verify the warning was logged
-          expect(warnSpy).toHaveBeenCalledWith(
-            expect.stringContaining('controlled by textRuns input'),
-          );
-          warnSpy.mockRestore();
-          done();
-        }, 0);
+        expect(warnSpy).toHaveBeenCalledWith(
+          expect.stringContaining('controlled by textRuns input'),
+        );
+        warnSpy.mockRestore();
       });
     });
   });
@@ -1354,7 +1284,7 @@ describe('RiveCanvasComponent', () => {
       );
     });
 
-    it('should apply dataBindings on load with auto-detected types', (done) => {
+    it('should apply dataBindings on load with auto-detected types', async () => {
       fixture.componentRef.setInput('src', 'test.riv');
       fixture.componentRef.setInput('dataBindings', {
         backgroundColor: '#FF5733',
@@ -1363,31 +1293,28 @@ describe('RiveCanvasComponent', () => {
         isActive: true,
         gameState: 'running',
       });
-      fixture.detectChanges();
+      await detectChangesAndSettle(fixture);
 
       onLoadCallback!();
-
-      setTimeout(() => {
-        expect(mockViewModelInstance.colorValue.rgba).toHaveBeenCalledWith(
-          255,
-          87,
-          51,
-          255,
-        );
-        expect(mockViewModelInstance.numberValue.value).toBe(42);
-        expect(mockViewModelInstance.stringValue.value).toBe('Alice');
-        expect(mockViewModelInstance.booleanValue.value).toBe(true);
-        expect(mockViewModelInstance.enumValue.value).toBe('running');
-        expect(mockRive.bindViewModelInstance).toHaveBeenCalledWith(
-          mockViewModelInstance,
-        );
-        done();
-      }, 0);
+      await new Promise<void>((r) => setTimeout(r, 0));
+      expect(mockViewModelInstance.colorValue.rgba).toHaveBeenCalledWith(
+        255,
+        87,
+        51,
+        255,
+      );
+      expect(mockViewModelInstance.numberValue.value).toBe(42);
+      expect(mockViewModelInstance.stringValue.value).toBe('Alice');
+      expect(mockViewModelInstance.booleanValue.value).toBe(true);
+      expect(mockViewModelInstance.enumValue.value).toBe('running');
+      expect(mockRive.bindViewModelInstance).toHaveBeenCalledWith(
+        mockViewModelInstance,
+      );
     });
 
-    it('should emit dataBindingChange on callback from ViewModel property updates', (done) => {
+    it('should emit dataBindingChange on callback from ViewModel property updates', async () => {
       fixture.componentRef.setInput('src', 'test.riv');
-      fixture.detectChanges();
+      await detectChangesAndSettle(fixture);
 
       const emitted: Array<{
         path: string;
@@ -1397,91 +1324,76 @@ describe('RiveCanvasComponent', () => {
       component.dataBindingChange.subscribe((event) => emitted.push(event));
 
       onLoadCallback!();
-
-      setTimeout(() => {
-        mockViewModelInstance.numberValue.value = 13;
-        mockViewModelInstance.numberValue.emitChange();
-
-        setTimeout(() => {
-          expect(emitted).toEqual(
-            expect.arrayContaining([
-              expect.objectContaining({
-                path: 'score',
-                propertyType: 'number',
-                value: 13,
-              }),
-            ]),
-          );
-          done();
-        }, 0);
-      }, 0);
+      await new Promise<void>((r) => setTimeout(r, 0));
+      mockViewModelInstance.numberValue.value = 13;
+      mockViewModelInstance.numberValue.emitChange();
+      await new Promise<void>((r) => setTimeout(r, 0));
+      expect(emitted).toEqual(
+        expect.arrayContaining([
+          expect.objectContaining({
+            path: 'score',
+            propertyType: 'number',
+            value: 13,
+          }),
+        ]),
+      );
     });
 
-    it('should support get/set helpers and fireTrigger', (done) => {
+    it('should support get/set helpers and fireTrigger', async () => {
       fixture.componentRef.setInput('src', 'test.riv');
       fixture.componentRef.setInput('dataBindings', { isActive: true });
-      fixture.detectChanges();
+      await detectChangesAndSettle(fixture);
 
       onLoadCallback!();
+      await new Promise<void>((r) => setTimeout(r, 0));
+      expect(component.getDataBinding('score')).toBe(0);
 
-      setTimeout(() => {
-        expect(component.getDataBinding('score')).toBe(0);
-
-        component.setDataBinding('score', 5);
-        expect(mockViewModelInstance.numberValue.value).toBe(5);
-        expect(component.getDataBinding('score')).toBe(5);
-        component.setDataBinding('playerName', 'Bob');
-        expect(mockViewModelInstance.stringValue.value).toBe('Bob');
-        expect(component.getDataBinding('playerName')).toBe('Bob');
-        component.fireViewModelTrigger('onComplete');
-        expect(mockViewModelInstance.triggerValue.trigger).toHaveBeenCalled();
-        done();
-      }, 0);
+      component.setDataBinding('score', 5);
+      expect(mockViewModelInstance.numberValue.value).toBe(5);
+      expect(component.getDataBinding('score')).toBe(5);
+      component.setDataBinding('playerName', 'Bob');
+      expect(mockViewModelInstance.stringValue.value).toBe('Bob');
+      expect(component.getDataBinding('playerName')).toBe('Bob');
+      component.fireViewModelTrigger('onComplete');
+      expect(mockViewModelInstance.triggerValue.trigger).toHaveBeenCalled();
     });
 
-    it('should mark controlled keys warning and keep uncontrolled path mutable', (done) => {
+    it('should mark controlled keys warning and keep uncontrolled path mutable', async () => {
       const warnSpy = jest.spyOn(console, 'warn').mockImplementation();
 
       fixture.componentRef.setInput('src', 'test.riv');
       fixture.componentRef.setInput('dataBindings', { score: 1 });
       fixture.componentRef.setInput('debugMode', true);
-      fixture.detectChanges();
+      await detectChangesAndSettle(fixture);
 
       onLoadCallback!();
-
-      setTimeout(() => {
-        component.setDataBinding('score', 2);
-        component.setDataBinding('gameState', 'paused');
-        expect(warnSpy).toHaveBeenCalledWith(
-          expect.stringContaining('controlled by dataBindings input'),
-        );
-        expect(mockViewModelInstance.numberValue.value).toBe(2);
-        expect(mockViewModelInstance.enumValue.value).toBe('paused');
-        warnSpy.mockRestore();
-        done();
-      }, 0);
+      await new Promise<void>((r) => setTimeout(r, 0));
+      component.setDataBinding('score', 2);
+      component.setDataBinding('gameState', 'paused');
+      expect(warnSpy).toHaveBeenCalledWith(
+        expect.stringContaining('controlled by dataBindings input'),
+      );
+      expect(mockViewModelInstance.numberValue.value).toBe(2);
+      expect(mockViewModelInstance.enumValue.value).toBe('paused');
+      warnSpy.mockRestore();
     });
 
-    it('should emit type mismatch validation error', (done) => {
+    it('should emit type mismatch validation error', async () => {
       fixture.componentRef.setInput('src', 'test.riv');
-      fixture.detectChanges();
+      await detectChangesAndSettle(fixture);
 
       const errors: Error[] = [];
       component.loadError.subscribe((error) => errors.push(error));
       onLoadCallback!();
-
-      setTimeout(() => {
-        component.setDataBinding('score', 'invalid');
-        setTimeout(() => {
-          expect(errors.some((error) => error.name === 'RiveValidationError')).toBe(
-            true,
-          );
-          done();
-        }, 0);
-      }, 0);
+      await new Promise<void>((r) => setTimeout(r, 0));
+      component.setDataBinding('score', 'invalid');
+      await new Promise<void>((r) => setTimeout(r, 0));
+      expect(
+        errors.some((error) => error.name === 'RiveValidationError'),
+      ).toBe(true);
     });
 
-    it('should cleanup property subscriptions on destroy', (done) => {
+    it('should cleanup property subscriptions on destroy', async () => {
       const onDisposalSpy = jest.fn();
       const unsubscribe = () => {
         onDisposalSpy();
@@ -1507,20 +1419,17 @@ describe('RiveCanvasComponent', () => {
       mockRive.defaultViewModel = jest.fn(() => localViewModel as any);
 
       fixture.componentRef.setInput('src', 'test.riv');
-      fixture.detectChanges();
+      await detectChangesAndSettle(fixture);
 
       onLoadCallback!();
-
-      setTimeout(() => {
-        fixture.destroy();
-        expect(onDisposalSpy).toHaveBeenCalled();
-        done();
-      }, 0);
+      await new Promise<void>((r) => setTimeout(r, 0));
+      fixture.destroy();
+      expect(onDisposalSpy).toHaveBeenCalled();
     });
 
-    it('should emit dataBindingChange when trigger fires', (done) => {
+    it('should emit dataBindingChange when trigger fires', async () => {
       fixture.componentRef.setInput('src', 'test.riv');
-      fixture.detectChanges();
+      await detectChangesAndSettle(fixture);
 
       const emitted: Array<{
         path: string;
@@ -1530,26 +1439,21 @@ describe('RiveCanvasComponent', () => {
       component.dataBindingChange.subscribe((event) => emitted.push(event));
 
       onLoadCallback!();
-
-      setTimeout(() => {
-        mockViewModelInstance.triggerValue.emitChange();
-
-        setTimeout(() => {
-          expect(emitted).toEqual(
-            expect.arrayContaining([
-              expect.objectContaining({
-                path: 'onComplete',
-                propertyType: 'trigger',
-                value: true,
-              }),
-            ]),
-          );
-          done();
-        }, 0);
-      }, 0);
+      await new Promise<void>((r) => setTimeout(r, 0));
+      mockViewModelInstance.triggerValue.emitChange();
+      await new Promise<void>((r) => setTimeout(r, 0));
+      expect(emitted).toEqual(
+        expect.arrayContaining([
+          expect.objectContaining({
+            path: 'onComplete',
+            propertyType: 'trigger',
+            value: true,
+          }),
+        ]),
+      );
     });
 
-    it('should reinitialize ViewModel when viewModelName changes', (done) => {
+    it('should reinitialize ViewModel when viewModelName changes', async () => {
       const alternateVM = createMockViewModel();
       alternateVM.name = 'AlternateViewModel';
       mockRive.viewModelByName = jest.fn((name: string) => {
@@ -1560,86 +1464,74 @@ describe('RiveCanvasComponent', () => {
 
       fixture.componentRef.setInput('src', 'test.riv');
       fixture.componentRef.setInput('viewModelName', 'MainViewModel');
-      fixture.detectChanges();
+      await detectChangesAndSettle(fixture);
 
       onLoadCallback!();
+      await new Promise<void>((r) => setTimeout(r, 0));
+      expect(mockRive.viewModelByName).toHaveBeenCalledWith('MainViewModel');
 
-      setTimeout(() => {
-        expect(mockRive.viewModelByName).toHaveBeenCalledWith('MainViewModel');
+      fixture.componentRef.setInput('viewModelName', 'AlternateViewModel');
+      await detectChangesAndSettle(fixture);
 
-        fixture.componentRef.setInput('viewModelName', 'AlternateViewModel');
-        fixture.detectChanges();
-
-        setTimeout(() => {
-          expect(mockRive.viewModelByName).toHaveBeenCalledWith('AlternateViewModel');
-          done();
-        }, 0);
-      }, 0);
+      expect(mockRive.viewModelByName).toHaveBeenCalledWith(
+        'AlternateViewModel',
+      );
     });
 
-    it('should emit validation error for invalid opacity value', (done) => {
+    it('should emit validation error for invalid opacity value', async () => {
       fixture.componentRef.setInput('src', 'test.riv');
-      fixture.detectChanges();
+      await detectChangesAndSettle(fixture);
 
       const errors: Error[] = [];
       component.loadError.subscribe((error) => errors.push(error));
 
       onLoadCallback!();
-
-      setTimeout(() => {
-        component.setColorOpacity('backgroundColor', 1.5);
-
-        setTimeout(() => {
-          expect(errors.some((error) => 
-            error.name === 'RiveValidationError' && 
-            error.message.includes('opacity')
-          )).toBe(true);
-          done();
-        }, 0);
-      }, 0);
-    });
-
-    it('should emit validation error for non-existent property in imperative API', (done) => {
-      fixture.componentRef.setInput('src', 'test.riv');
-      fixture.detectChanges();
-
-      const errors: Error[] = [];
-      component.loadError.subscribe((error) => errors.push(error));
-
-      onLoadCallback!();
-
-      setTimeout(() => {
-        component.setDataBinding('nonExistentProperty', 42);
-
-        setTimeout(() => {
-          expect(errors.some((error) => 
+      await new Promise<void>((r) => setTimeout(r, 0));
+      component.setColorOpacity('backgroundColor', 1.5);
+      await new Promise<void>((r) => setTimeout(r, 0));
+      expect(
+        errors.some(
+          (error) =>
             error.name === 'RiveValidationError' &&
-            error.message.includes('not found')
-          )).toBe(true);
-          done();
-        }, 0);
-      }, 0);
+            error.message.includes('opacity'),
+        ),
+      ).toBe(true);
     });
 
-    it('should emit validation error for invalid color format', (done) => {
+    it('should emit validation error for non-existent property in imperative API', async () => {
       fixture.componentRef.setInput('src', 'test.riv');
-      fixture.detectChanges();
+      await detectChangesAndSettle(fixture);
 
       const errors: Error[] = [];
       component.loadError.subscribe((error) => errors.push(error));
 
       onLoadCallback!();
+      await new Promise<void>((r) => setTimeout(r, 0));
+      component.setDataBinding('nonExistentProperty', 42);
+      await new Promise<void>((r) => setTimeout(r, 0));
+      expect(
+        errors.some(
+          (error) =>
+            error.name === 'RiveValidationError' &&
+            error.message.includes('not found'),
+        ),
+      ).toBe(true);
+    });
 
-      setTimeout(() => {
-        component.setColor('backgroundColor', 'invalid-color');
+    it('should emit validation error for invalid color format', async () => {
+      fixture.componentRef.setInput('src', 'test.riv');
+      await detectChangesAndSettle(fixture);
 
-        setTimeout(() => {
-          expect(errors.some((error) => 
-            error.name === 'RiveValidationError'
-          )).toBe(true);
-          done();
-        }, 0);
-      }, 0);
+      const errors: Error[] = [];
+      component.loadError.subscribe((error) => errors.push(error));
+
+      onLoadCallback!();
+      await new Promise<void>((r) => setTimeout(r, 0));
+      component.setColor('backgroundColor', 'invalid-color');
+      await new Promise<void>((r) => setTimeout(r, 0));
+      expect(
+        errors.some((error) => error.name === 'RiveValidationError'),
+      ).toBe(true);
     });
   });
 });

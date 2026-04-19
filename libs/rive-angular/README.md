@@ -10,8 +10,26 @@
 
 Modern Angular wrapper for [Rive](https://rive.app) animations with reactive state management, built with Angular signals and zoneless architecture.
 
-**1.x** is the stable major line: the public API follows [Semantic Versioning](https://semver.org/).
-Current release candidate in this branch: **`1.2.0-beta.0`** (pre-release).
+**2.x** is the current major line: the public API follows [Semantic Versioning](https://semver.org/).
+Current release candidate in this branch: **`2.0.0-beta.0`** (pre-release).
+
+## Migration from v1 to v2
+
+Version `2.0.0` contains a deliberate breaking change to remove hard runtime linkage to `@rive-app/canvas` and fully support `webgl2-only` installations.
+
+### Breaking change: runtime value exports removed
+
+These exports are now **type-only** from `@grandgular/rive-angular`:
+
+- `Rive`
+- `RiveFile`
+- `Layout`
+- `StateMachineInput`
+- `ViewModelInstance`
+
+If your app used them as runtime values (for example `new Rive(...)` from this package), switch to direct SDK imports from `@rive-app/canvas` or `@rive-app/webgl2` depending on your runtime path.
+
+Most applications using `RiveCanvasComponent`, `RiveFileService`, `Fit`, `Alignment`, `EventType`, `LoopType`, and component APIs do not require code changes.
 
 ## What is Rive?
 
@@ -69,8 +87,10 @@ Both libraries provide similar features and follow the same philosophy of provid
 
 ```bash
 npm uninstall ng-rive
-npm install @grandgular/rive-angular @rive-app/canvas @rive-app/webgl2
+npm install @grandgular/rive-angular @rive-app/canvas
 ```
+
+If you use WebGL2 (`provideRiveRuntime({ renderer: 'webgl2' })`) or rely on automatic fallback from WebGL2 to Canvas, also install `@rive-app/webgl2` (see [Installation](#installation)).
 
 ### 2. Update imports
 
@@ -131,22 +151,38 @@ onLoaded() {
 
 ## Installation
 
+`@rive-app/canvas` and `@rive-app/webgl2` are **optional peer dependencies**: install the runtime package(s) that match how you configure the library. The bundler only pulls in the SDK that is actually imported for your `renderer` / fallback path.
+
+| Goal | Packages to install |
+|------|------------------------|
+| Canvas only (default `renderer`, or you never use WebGL2) | `@grandgular/rive-angular` + `@rive-app/canvas` |
+| WebGL2 only (e.g. `renderer: 'webgl2'` and `strict: true`, so no Canvas fallback) | `@grandgular/rive-angular` + `@rive-app/webgl2` |
+| WebGL2 with automatic fallback to Canvas (`strict: false`) | `@grandgular/rive-angular` + `@rive-app/canvas` + `@rive-app/webgl2` |
+
 ```bash
-npm install @grandgular/rive-angular @rive-app/canvas @rive-app/webgl2
+npm install @grandgular/rive-angular @rive-app/canvas
 ```
 
 Or with yarn:
 
 ```bash
-yarn add @grandgular/rive-angular @rive-app/canvas @rive-app/webgl2
+yarn add @grandgular/rive-angular @rive-app/canvas
 ```
+
+Add WebGL2 when needed:
+
+```bash
+npm install @rive-app/webgl2
+```
+
+If a required package is missing, initialization fails with an error that names the package and suggests either installing it or setting `strict: true` to avoid loading that renderer/fallback path.
 
 ## Quick Start
 
 ### Selector notice
 
 - Preferred selector: `<rive>`
-- Legacy selector: `<rive-canvas>` (deprecated, will be removed in the next major version)
+- Legacy selector: `<rive-canvas>` (deprecated, will be removed in a future major version)
 
 Both selectors are supported in the current major for backward compatibility.
 
@@ -626,8 +662,10 @@ provideRiveRuntime({
 
 - `renderer` is optional; default is `'canvas'`.
 - `strict` is optional; default is `false`.
-- With `strict: false`, the library automatically falls back to the other renderer if the preferred renderer fails to initialize.
-- With `strict: true`, fallback is disabled and initialization fails fast.
+- With `strict: false`, the library automatically falls back to the other renderer if the preferred renderer fails to initialize. **Both** `@rive-app/canvas` and `@rive-app/webgl2` must be installed for fallback to succeed if the other SDK is needed.
+- With `strict: true`, fallback is disabled and initialization fails fast if the chosen renderer cannot load — useful when you intentionally ship only one runtime package.
+
+If fallback fails (for example WebGL2 unavailable **and** the Canvas package is not installed), the error explains what failed and suggests installing the missing package or using `strict: true` with a single renderer.
 
 ### Migration from `provideAppInitializer`
 
@@ -882,8 +920,7 @@ See [CHANGELOG.md](./CHANGELOG.md) for complete details, migration guide, and al
 ## Requirements
 
 - Angular 18.0.0 or higher
-- @rive-app/canvas 2.35.0 or higher
-- @rive-app/webgl2 2.35.0 or higher (optional, required for vector feathering)
+- At least one of: `@rive-app/canvas` or `@rive-app/webgl2` (^2.35.0), matching your `provideRiveRuntime` / fallback setup (see [Installation](#installation))
 - TypeScript 5.4 or higher
 
 ## Contributing

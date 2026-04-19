@@ -1,8 +1,12 @@
 import { Injectable, signal, Signal, inject } from '@angular/core';
-import { RIVE_DEBUG_CONFIG, RIVE_RUNTIME_CONFIG } from '../utils';
+import {
+  RIVE_DEBUG_CONFIG,
+  RIVE_RUNTIME_CONFIG,
+  DEFAULT_RIVE_RUNTIME_RESOLVED_CONFIG,
+} from '../utils';
 import { RiveLogger } from '../utils';
 import { ensureRiveRuntimeReady } from '../utils/rive-runtime';
-import { CANVAS_RIVE_SDK, EventType, type RiveFile } from '../utils';
+import { EventType, type RiveFile } from '../utils';
 
 /**
  * Status of RiveFile loading
@@ -217,9 +221,11 @@ export class RiveFileService {
     };
 
     try {
-      const runtimeSdk = this.runtimeConfig
-        ? (await ensureRiveRuntimeReady(this.runtimeConfig)).sdk
-        : CANVAS_RIVE_SDK;
+      const runtimeSdk = (
+        await ensureRiveRuntimeReady(
+          this.runtimeConfig ?? DEFAULT_RIVE_RUNTIME_RESOLVED_CONFIG,
+        )
+      ).sdk;
 
       // Extract debug parameter - it's not part of RiveFile SDK API
       // eslint-disable-next-line @typescript-eslint/no-unused-vars
@@ -263,8 +269,7 @@ export class RiveFileService {
 
       logger.debug(`RiveFileService: Initializing file`, { cacheKey });
 
-      // Await init() to catch initialization errors (e.g. WASM issues)
-      await file.init();
+      file.init();
     } catch (error) {
       logger.error('RiveFileService: Unexpected error loading file', error);
 

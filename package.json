@@ -1,6 +1,7 @@
 {
   "name": "@nxw/source",
   "version": "0.0.0",
+  "packageManager": "npm@11.12.1",
   "license": "MIT",
   "scripts": {
     "build:lib": "nx build rive-angular",

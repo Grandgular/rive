@@ -1,4 +1,4 @@
-import { Rive } from '@rive-app/canvas';
+import type { Rive } from './rive-sdk';
 import { RiveValidationError } from '../models/rive.model';
 import { RiveErrorCode, formatErrorMessage } from './error-codes';
 import { RiveLogger } from './logger';

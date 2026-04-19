@@ -5,6 +5,10 @@ import {
   makeEnvironmentProviders,
   provideAppInitializer,
 } from '@angular/core';
+import {
+  DEFAULT_RIVE_RENDERER,
+  type RiveRenderer,
+} from './rive-sdk';
 import { ensureRiveRuntimeReady } from './rive-runtime';
 
 /**
@@ -15,6 +19,8 @@ import { ensureRiveRuntimeReady } from './rive-runtime';
 export interface RiveRuntimeConfig {
   wasmUrl?: string;
   lazy?: true;
+  renderer?: RiveRenderer;
+  strict?: boolean;
 }
 
 /**
@@ -23,6 +29,8 @@ export interface RiveRuntimeConfig {
 export interface RiveRuntimeResolvedConfig {
   wasmUrl?: string;
   lazy: boolean;
+  renderer: RiveRenderer;
+  strict: boolean;
 }
 
 /**
@@ -37,6 +45,8 @@ function resolveRuntimeConfig(
   return {
     wasmUrl: config?.wasmUrl,
     lazy: config?.lazy === true,
+    renderer: config?.renderer ?? DEFAULT_RIVE_RENDERER,
+    strict: config?.strict === true,
   };
 }
 

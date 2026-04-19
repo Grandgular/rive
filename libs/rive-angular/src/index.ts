@@ -50,7 +50,7 @@ export {
   riveColorToHex,
 } from './lib/utils/color-parser';
 
-// Re-export commonly used types from @rive-app/canvas for convenience
+// Re-export commonly used types from Rive SDK for convenience
 export {
   Rive,
   RiveFile,
@@ -60,4 +60,4 @@ export {
   type LayoutParameters,
   type RiveParameters,
   type RiveFileParameters,
-} from '@rive-app/canvas';
+} from './lib/utils/rive-sdk';

@@ -13,6 +13,7 @@
 Modern Angular wrapper for [Rive](https://rive.app) animations with reactive state management, built with Angular signals and zoneless architecture.
 
 **1.x** is the stable major line: the public API follows [Semantic Versioning](https://semver.org/).
+Current release candidate in this branch: **`1.2.0-beta.0`** (pre-release).
 
 ## What is Rive?
 
@@ -54,7 +55,7 @@ This library follows the design principles of the official [rive-react](https://
 
 | Aspect | rive-react | @grandgular/rive-angular |
 |--------|------------|--------------------------|
-| Component API | `<Rive>` component | `<rive-canvas>` |
+| Component API | `<Rive>` component | `<rive>` (`<rive-canvas>` legacy alias) |
 | Reactivity | Hooks (useState, useEffect) | Signals |
 | File preloading | `useRiveFile` hook | `RiveFileService` |
 | State access | Hook return values | Public signals |
@@ -70,7 +71,7 @@ Both libraries provide similar features and follow the same philosophy of provid
 
 ```bash
 npm uninstall ng-rive
-npm install @grandgular/rive-angular @rive-app/canvas
+npm install @grandgular/rive-angular @rive-app/canvas @rive-app/webgl2
 ```
 
 ### 2. Update imports
@@ -95,7 +96,7 @@ npm install @grandgular/rive-angular @rive-app/canvas
 
 ```html
 <!-- Standalone, signals, zoneless -->
-<rive-canvas
+<rive
   src="assets/my-animation.riv"
   [autoplay]="true"
   style="width: 500px; height: 500px"
@@ -117,7 +118,7 @@ npm install @grandgular/rive-angular @rive-app/canvas
 **@grandgular/rive-angular:**
 
 ```html
-<rive-canvas
+<rive
   src="assets/my-animation.riv"
   stateMachines="StateMachine"
   (loaded)="onLoaded()"
@@ -133,16 +134,23 @@ onLoaded() {
 ## Installation
 
 ```bash
-npm install @grandgular/rive-angular @rive-app/canvas
+npm install @grandgular/rive-angular @rive-app/canvas @rive-app/webgl2
 ```
 
 Or with yarn:
 
 ```bash
-yarn add @grandgular/rive-angular @rive-app/canvas
+yarn add @grandgular/rive-angular @rive-app/canvas @rive-app/webgl2
 ```
 
 ## Quick Start
+
+### Selector notice
+
+- Preferred selector: `<rive>`
+- Legacy selector: `<rive-canvas>` (deprecated, will be removed in the next major version)
+
+Both selectors are supported in the current major for backward compatibility.
 
 ### Basic usage
 
@@ -155,7 +163,7 @@ import { RiveCanvasComponent, Fit, Alignment } from '@grandgular/rive-angular';
   standalone: true,
   imports: [RiveCanvasComponent],
   template: `
-    <rive-canvas
+    <rive
       src="assets/animation.riv"
       [autoplay]="true"
       [fit]="Fit.Cover"
@@ -165,7 +173,7 @@ import { RiveCanvasComponent, Fit, Alignment } from '@grandgular/rive-angular';
     />
   `,
   styles: [`
-    rive-canvas {
+    rive {
       width: 100%;
       height: 400px;
     }
@@ -196,7 +204,7 @@ import { RiveCanvasComponent } from '@grandgular/rive-angular';
   standalone: true,
   imports: [RiveCanvasComponent],
   template: `
-    <rive-canvas
+    <rive
       src="assets/interactive.riv"
       [stateMachines]="'StateMachine'"
       (loaded)="onLoaded()"
@@ -228,7 +236,7 @@ Rive text runs allow you to update text content at runtime. The library provides
 Use the `textRuns` input for reactive, template-driven text updates:
 
 ```html
-<rive-canvas
+<rive
   src="assets/hello.riv"
   [textRuns]="{ greeting: userName(), subtitle: 'Welcome' }"
 />
@@ -298,7 +306,7 @@ import { RiveCanvasComponent } from '@grandgular/rive-angular';
   standalone: true,
   imports: [RiveCanvasComponent],
   template: `
-    <rive-canvas
+    <rive
       src="assets/animation.riv"
       [dataBindings]="{
         backgroundColor: themeColor(),
@@ -356,7 +364,7 @@ import { RiveCanvasComponent } from '@grandgular/rive-angular';
   standalone: true,
   imports: [RiveCanvasComponent],
   template: `
-    <rive-canvas src="assets/animation.riv" />
+    <rive src="assets/animation.riv" />
     
     <button (click)="updateColor()">Update Color</button>
     <button (click)="updateScore()">Update Score</button>
@@ -425,7 +433,7 @@ const hex = riveColorToHex({ r: 255, g: 0, b: 0, a: 255 }); // '#FF0000FF'
 If your `.riv` file contains multiple ViewModels, specify which one to use:
 
 ```typescript
-<rive-canvas
+<rive
   src="assets/animation.riv"
   viewModelName="GameViewModel"
   [dataBindings]="{ score: 42 }"
@@ -452,7 +460,7 @@ Imperative methods (`setDataBinding`, `setColor`, `setColorOpacity`, `fireViewMo
 - Opacity value is out of range (must be between 0.0 and 1.0)
 
 ```typescript
-<rive-canvas
+<rive
   src="assets/animation.riv"
   (loadError)="handleError($event)"
 />
@@ -497,7 +505,7 @@ import { RiveCanvasComponent, RiveFileService } from '@grandgular/rive-angular';
   imports: [RiveCanvasComponent],
   template: `
     @if (fileState().status === 'success') {
-      <rive-canvas
+      <rive
         [riveFile]="fileState().riveFile"
         [autoplay]="true"
       />
@@ -553,7 +561,7 @@ Available log levels: `'none' | 'error' | 'warn' | 'info' | 'debug'`
 Enable debug mode for a specific component instance:
 
 ```typescript
-<rive-canvas
+<rive
   src="assets/animation.riv"
   [debugMode]="true" 
 />
@@ -568,6 +576,9 @@ When debug mode is enabled, the library will log:
 
 Use `provideRiveRuntime()` to control when the Rive WASM runtime initializes.
 
+By default, runtime uses `renderer: 'canvas'` for backward compatibility.
+To enable vector feathering support, configure `renderer: 'webgl2'`.
+
 ### Eager mode (default)
 
 Initializes runtime on app startup:
@@ -578,7 +589,10 @@ import { provideRiveRuntime } from '@grandgular/rive-angular';
 
 export const appConfig: ApplicationConfig = {
   providers: [
-    provideRiveRuntime({ wasmUrl: 'assets/rive/rive.v1.wasm' }),
+    provideRiveRuntime({
+      wasmUrl: 'assets/rive/rive.v1.wasm',
+      renderer: 'canvas',
+    }),
   ],
 };
 ```
@@ -596,10 +610,26 @@ export const appConfig: ApplicationConfig = {
     provideRiveRuntime({
       wasmUrl: 'assets/rive/rive.v1.wasm',
       lazy: true,
+      renderer: 'webgl2',
+      strict: false,
     }),
   ],
 };
 ```
+
+### Renderer fallback behavior
+
+```typescript
+provideRiveRuntime({
+  renderer: 'webgl2',
+  strict: false,
+});
+```
+
+- `renderer` is optional; default is `'canvas'`.
+- `strict` is optional; default is `false`.
+- With `strict: false`, the library automatically falls back to the other renderer if the preferred renderer fails to initialize.
+- With `strict: true`, fallback is disabled and initialization fails fast.
 
 ### Migration from `provideAppInitializer`
 
@@ -624,7 +654,7 @@ The library validates your configuration against the loaded Rive file and provid
 Validation errors (e.g., missing artboard or animation) are **non-fatal**. They are emitted via the `loadError` output but do not crash the application.
 
 ```typescript
-<rive-canvas
+<rive
   src="assets/anim.riv"
   [artboard]="'WrongName'"
   (loadError)="onError($event)"
@@ -659,12 +689,16 @@ In this case, `onError` receives a `RiveValidationError` with code `RIVE_201`, a
 interface RiveRuntimeConfig {
   wasmUrl?: string;
   lazy?: true;
+  renderer?: 'canvas' | 'webgl2';
+  strict?: boolean;
 }
 ```
 
 - `provideRiveRuntime(config?: RiveRuntimeConfig)` - configures Rive runtime initialization strategy.
 - `lazy` omitted - eager initialization on startup.
 - `lazy: true` - deferred initialization at first runtime usage.
+- `renderer` omitted - defaults to `'canvas'` for backward compatibility.
+- `strict` omitted - defaults to `false` and allows automatic fallback.
 
 ### RiveCanvasComponent
 
@@ -723,7 +757,7 @@ import {
 @Component({
   imports: [RiveCanvasComponent],
   template: `
-    <rive-canvas
+    <rive
       src="animation.riv"
       (animationPlay)="onAnimationPlay($event)"
       (animationPause)="onAnimationPause($event)"
@@ -851,6 +885,7 @@ See [CHANGELOG.md](libs/rive-angular/CHANGELOG.md) for complete details, migrati
 
 - Angular 18.0.0 or higher
 - @rive-app/canvas 2.35.0 or higher
+- @rive-app/webgl2 2.35.0 or higher (optional, required for vector feathering)
 - TypeScript 5.4 or higher
 
 ## Contributing

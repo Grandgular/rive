@@ -2,6 +2,29 @@
 
 All notable changes to this project will be documented in this file.
 
+## [1.2.0-beta.0] - 2026-04-17
+
+### Added
+
+- **Dual runtime support** for `@rive-app/canvas` and `@rive-app/webgl2`.
+- **New preferred component selector**: `<rive>` (with `<rive-canvas>` still supported as a legacy alias).
+- **New runtime options** in `provideRiveRuntime()`:
+  - `renderer?: 'canvas' | 'webgl2'` (default: `'canvas'`)
+  - `strict?: boolean` (default: `false`)
+- **Automatic fallback behavior** when `strict` is `false`: if the preferred renderer fails to initialize, the library tries the other renderer automatically.
+- **Runtime tests** covering `webgl2`, fallback behavior, and strict mode failures.
+
+### Changed
+
+- Runtime initialization now resolves and returns the active renderer module internally, used by both `RiveCanvasComponent` and `RiveFileService`.
+- Internal SDK imports are centralized through a shared facade to simplify runtime selection.
+
+### Notes
+
+- This release prioritizes backward compatibility and functional dual-support.
+- Bundle-level optimization (ensuring non-selected runtime is excluded from bundles) is intentionally planned for a follow-up release.
+- `<rive-canvas>` is now considered deprecated and is planned for removal in the next major release.
+
 ## [1.1.0] - 2026-04-16
 
 ### Added

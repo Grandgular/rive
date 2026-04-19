@@ -16,24 +16,28 @@ import {
 } from '@angular/core';
 import { isPlatformBrowser } from '@angular/common';
 import {
-  Rive,
-  RiveFile,
-  Layout,
   Fit,
   Alignment,
-  StateMachineInput,
-  type LayoutParameters,
-  Event as RiveEvent,
   EventType,
-  ViewModelInstance,
-} from '@rive-app/canvas';
+  CANVAS_RIVE_SDK,
+  DEFAULT_RIVE_RENDERER,
+  getFallbackRenderer,
+  type Rive,
+  type RiveFile,
+  type RiveRenderer,
+  type StateMachineInput,
+  type LayoutParameters,
+  type RiveEvent,
+  type ViewModelInstance,
+  type RiveSdkModule,
+} from '../utils/rive-sdk';
 import { RiveLoadError } from '../models';
 import type {
   DataBindingValue,
   DataBindingChangeEvent,
   DataBindingPropertyType,
   RiveColor,
-} from '../models/data-binding.types';
+} from '../models';
 import {
   ElementObserver,
   RiveLogger,
@@ -62,7 +66,7 @@ import { RiveValidationError } from '../models';
  *
  * @example
  * ```html
- * <rive-canvas
+ * <rive
  *   src="assets/animations/rive/animation.riv"
  *   [stateMachines]="'StateMachine'"
  *   [autoplay]="true"
@@ -74,7 +78,7 @@ import { RiveValidationError } from '../models';
  */
 @Component({
   // eslint-disable-next-line @angular-eslint/component-selector
-  selector: 'rive-canvas',
+  selector: 'rive, rive-canvas',
   standalone: true,
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
@@ -255,6 +259,7 @@ export class RiveCanvasComponent implements AfterViewInit {
 
   // Private state
   #rive: Rive | null = null;
+  #runtimeSdk: RiveSdkModule | null = null;
   private readonly logger: RiveLogger;
   private resizeObserver: ResizeObserver | null = null;
   private isInitialized = false;
@@ -302,7 +307,8 @@ export class RiveCanvasComponent implements AfterViewInit {
       untracked(() => {
         if (this.#rive && isPlatformBrowser(this.#platformId)) {
           const layoutParams: LayoutParameters = { fit, alignment };
-          this.#rive.layout = new Layout(layoutParams);
+          const layoutCtor = (this.#runtimeSdk ?? CANVAS_RIVE_SDK).Layout;
+          this.#rive.layout = new layoutCtor(layoutParams as never) as never;
         }
       });
     });
@@ -536,25 +542,6 @@ export class RiveCanvasComponent implements AfterViewInit {
           alignment: this.alignment(),
         };
 
-        // Build typed Rive configuration
-        const baseConfig = {
-          canvas,
-          autoplay: this.autoplay(),
-          layout: new Layout(layoutParams),
-          useOffscreenRenderer: this.useOffscreenRenderer(),
-          shouldDisableRiveListeners: this.shouldDisableRiveListeners(),
-          automaticallyHandleEvents: this.automaticallyHandleEvents(),
-          onLoad: () => this.onLoad(),
-          onLoadError: (error?: unknown) => this.onLoadError(error),
-          onPlay: () => this.onPlay(),
-          onPause: () => this.onPause(),
-          onStop: () => this.onStop(),
-          onLoop: (event: RiveEvent) => this.onLoop(event),
-          onAdvance: (event: RiveEvent) => this.onAdvance(event),
-          onStateChange: (event: RiveEvent) => this.onStateChange(event),
-          onRiveEvent: (event: RiveEvent) => this.onRiveEvent(event),
-        };
-
         // Add source (priority: riveFile > src > buffer)
         const sourceConfig = riveFile
           ? { riveFile }
@@ -573,26 +560,47 @@ export class RiveCanvasComponent implements AfterViewInit {
             : {}),
         };
 
-        // Combine all configurations
-        const config = { ...baseConfig, ...sourceConfig, ...optionalConfig };
-
-        const createRiveInstance = () => {
+        const createRiveInstance = (runtimeSdk: RiveSdkModule) => {
           if (requestId !== this.loadRequestId) {
             return;
           }
 
-          const rive = new Rive(config);
+          const config = {
+            canvas,
+            autoplay: this.autoplay(),
+            layout: new runtimeSdk.Layout(layoutParams as never),
+            useOffscreenRenderer: this.useOffscreenRenderer(),
+            shouldDisableRiveListeners: this.shouldDisableRiveListeners(),
+            automaticallyHandleEvents: this.automaticallyHandleEvents(),
+            onLoad: () => this.onLoad(),
+            onLoadError: (error?: unknown) => this.onLoadError(error),
+            onPlay: () => this.onPlay(),
+            onPause: () => this.onPause(),
+            onStop: () => this.onStop(),
+            onLoop: (event: RiveEvent) => this.onLoop(event),
+            onAdvance: (event: RiveEvent) => this.onAdvance(event),
+            onStateChange: (event: RiveEvent) => this.onStateChange(event),
+            onRiveEvent: (event: RiveEvent) => this.onRiveEvent(event),
+            ...sourceConfig,
+            ...optionalConfig,
+          };
+
+          const rive = new runtimeSdk.Rive(config as never) as unknown as Rive;
 
           if (requestId !== this.loadRequestId) {
             try {
               rive.cleanup();
             } catch (cleanupError) {
-              this.logger.warn('Error during stale Rive cleanup:', cleanupError);
+              this.logger.warn(
+                'Error during stale Rive cleanup:',
+                cleanupError,
+              );
             }
             return;
           }
 
           this.#rive = rive;
+          this.#runtimeSdk = runtimeSdk;
 
           // Update public signal (riveReady will be emitted in onLoad)
           this.#ngZone.run(() => {
@@ -601,13 +609,39 @@ export class RiveCanvasComponent implements AfterViewInit {
         };
 
         if (!this.#runtimeConfig) {
-          createRiveInstance();
+          createRiveInstance(CANVAS_RIVE_SDK);
           return;
         }
 
-        void ensureRiveRuntimeReady(this.#runtimeConfig)
-          .then(() => {
-            createRiveInstance();
+        const runtimeConfig = this.#runtimeConfig;
+        const preferredRenderer =
+          runtimeConfig.renderer ?? DEFAULT_RIVE_RENDERER;
+        const strictMode = runtimeConfig.strict;
+
+        void ensureRiveRuntimeReady(runtimeConfig)
+          .then(async (runtimeResult) => {
+            try {
+              createRiveInstance(runtimeResult.sdk);
+            } catch (primaryCreateError) {
+              if (
+                strictMode ||
+                runtimeResult.renderer !== preferredRenderer ||
+                !this.shouldFallbackOnRendererError(
+                  primaryCreateError,
+                  preferredRenderer,
+                )
+              ) {
+                throw primaryCreateError;
+              }
+
+              const fallbackRuntime = await ensureRiveRuntimeReady({
+                ...runtimeConfig,
+                lazy: runtimeConfig.lazy,
+                renderer: getFallbackRenderer(preferredRenderer),
+                strict: true,
+              });
+              createRiveInstance(fallbackRuntime.sdk);
+            }
           })
           .catch((error) => {
             if (requestId !== this.loadRequestId) {
@@ -637,6 +671,23 @@ export class RiveCanvasComponent implements AfterViewInit {
         );
       }
     });
+  }
+
+  private shouldFallbackOnRendererError(
+    error: unknown,
+    renderer: RiveRenderer,
+  ): boolean {
+    if (renderer !== 'webgl2' || !(error instanceof Error)) {
+      return false;
+    }
+
+    const message = error.message.toLowerCase();
+    return (
+      message.includes('webgl') ||
+      message.includes('context') ||
+      message.includes('gpu') ||
+      message.includes('renderer')
+    );
   }
 
   // Event handlers (run inside Angular zone for change detection)
@@ -1009,7 +1060,9 @@ export class RiveCanvasComponent implements AfterViewInit {
       this.withLocalMutation(path, () => {
         const resolved = this.resolveViewModelProperty(vmi, path);
         if (!resolved) {
-          this.logger.warn(`Data binding property "${path}" not found in ViewModel`);
+          this.logger.warn(
+            `Data binding property "${path}" not found in ViewModel`,
+          );
           this.#ngZone.run(() =>
             this.loadError.emit(
               new RiveValidationError(
@@ -1138,7 +1191,12 @@ export class RiveCanvasComponent implements AfterViewInit {
 
         try {
           const parsedColor = parseRiveColor(color);
-          colorProp.rgba(parsedColor.r, parsedColor.g, parsedColor.b, parsedColor.a);
+          colorProp.rgba(
+            parsedColor.r,
+            parsedColor.g,
+            parsedColor.b,
+            parsedColor.a,
+          );
           this.logger.debug(`Color "${path}" set to:`, parsedColor);
         } catch (error) {
           this.logger.warn(`Failed to set color "${path}":`, error);
@@ -1206,7 +1264,9 @@ export class RiveCanvasComponent implements AfterViewInit {
 
     // Validate opacity range
     if (opacity < 0 || opacity > 1) {
-      this.logger.warn(`Invalid opacity value ${opacity}: must be between 0.0 and 1.0`);
+      this.logger.warn(
+        `Invalid opacity value ${opacity}: must be between 0.0 and 1.0`,
+      );
       this.#ngZone.run(() =>
         this.loadError.emit(
           new RiveValidationError(
@@ -1314,7 +1374,9 @@ export class RiveCanvasComponent implements AfterViewInit {
 
         // If no ViewModel found (file doesn't use ViewModels), that's OK
         if (!viewModel) {
-          this.logger.debug('No ViewModel found in file (file may not use ViewModels)');
+          this.logger.debug(
+            'No ViewModel found in file (file may not use ViewModels)',
+          );
           return;
         }
 
@@ -1364,7 +1426,9 @@ export class RiveCanvasComponent implements AfterViewInit {
   /**
    * Get ViewModel property information for debug logging.
    */
-  private getViewModelPropertyInfo(vmi: ViewModelInstance): Record<string, string> {
+  private getViewModelPropertyInfo(
+    vmi: ViewModelInstance,
+  ): Record<string, string> {
     const info: Record<string, string> = {};
     try {
       const properties = vmi.properties;
@@ -1373,7 +1437,8 @@ export class RiveCanvasComponent implements AfterViewInit {
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
         const propAny = prop as any;
         const propertyType = this.normalizeViewModelPropertyType(propAny?.type);
-        info[propAny.name || 'unknown'] = propertyType ?? (propAny.type || 'unknown');
+        info[propAny.name || 'unknown'] =
+          propertyType ?? (propAny.type || 'unknown');
       }
     } catch (error) {
       this.logger.warn('Failed to get ViewModel property info:', error);
@@ -1420,7 +1485,7 @@ export class RiveCanvasComponent implements AfterViewInit {
 
   /**
    * Subscribe to changes for a specific ViewModel property.
-   * Uses multiple event APIs to maximize compatibility with @rive-app/canvas runtime versions.
+   * Uses multiple event APIs to maximize compatibility with Rive runtime versions.
    */
   private subscribeToPropertyChanges(
     path: string,
@@ -1470,19 +1535,31 @@ export class RiveCanvasComponent implements AfterViewInit {
         }
       } else if (typeof propertyAny.subscribe === 'function') {
         const handler = propertyAny.subscribe(callback);
-        unsubscribe = this.buildUnsubscribeFromHandler(propertyAny, callback, handler);
+        unsubscribe = this.buildUnsubscribeFromHandler(
+          propertyAny,
+          callback,
+          handler,
+        );
       } else if (typeof propertyAny.addEventListener === 'function') {
         propertyAny.addEventListener('change', callback);
-        unsubscribe = () => propertyAny.removeEventListener?.('change', callback);
+        unsubscribe = () =>
+          propertyAny.removeEventListener?.('change', callback);
       } else if (typeof propertyAny.addListener === 'function') {
         propertyAny.addListener('change', callback);
         unsubscribe = () => propertyAny.removeListener?.('change', callback);
       } else if (typeof propertyAny.onChange === 'function') {
         const handler = propertyAny.onChange(callback);
-        unsubscribe = this.buildUnsubscribeFromHandler(propertyAny, callback, handler);
+        unsubscribe = this.buildUnsubscribeFromHandler(
+          propertyAny,
+          callback,
+          handler,
+        );
       }
     } catch (error) {
-      this.logger.warn(`Failed to subscribe to ViewModel property "${path}":`, error);
+      this.logger.warn(
+        `Failed to subscribe to ViewModel property "${path}":`,
+        error,
+      );
     }
 
     if (!unsubscribe) {
@@ -1504,11 +1581,21 @@ export class RiveCanvasComponent implements AfterViewInit {
       return handler as () => void;
     }
 
-    if (handler && typeof handler === 'object' && 'unsubscribe' in handler && typeof handler.unsubscribe === 'function') {
+    if (
+      handler &&
+      typeof handler === 'object' &&
+      'unsubscribe' in handler &&
+      typeof handler.unsubscribe === 'function'
+    ) {
       return () => (handler as { unsubscribe: () => void }).unsubscribe();
     }
 
-    if (handler && typeof handler === 'object' && 'dispose' in handler && typeof handler.dispose === 'function') {
+    if (
+      handler &&
+      typeof handler === 'object' &&
+      'dispose' in handler &&
+      typeof handler.dispose === 'function'
+    ) {
       return () => (handler as { dispose: () => void }).dispose();
     }
 
@@ -1608,7 +1695,9 @@ export class RiveCanvasComponent implements AfterViewInit {
     return undefined;
   }
 
-  private normalizeViewModelPropertyType(type: unknown): DataBindingPropertyType | null {
+  private normalizeViewModelPropertyType(
+    type: unknown,
+  ): DataBindingPropertyType | null {
     if (typeof type !== 'string') {
       return null;
     }
@@ -1700,9 +1789,12 @@ export class RiveCanvasComponent implements AfterViewInit {
             this.#ngZone.run(() =>
               this.loadError.emit(
                 new RiveValidationError(
-                  formatErrorMessage(RiveErrorCode.DataBindingPropertyNotFound, {
-                    path,
-                  }),
+                  formatErrorMessage(
+                    RiveErrorCode.DataBindingPropertyNotFound,
+                    {
+                      path,
+                    },
+                  ),
                   RiveErrorCode.DataBindingPropertyNotFound,
                 ),
               ),
@@ -1808,7 +1900,9 @@ export class RiveCanvasComponent implements AfterViewInit {
     }
 
     if (type === 'trigger') {
-      this.logger.warn(`Cannot set trigger property "${path}" via setDataBinding`);
+      this.logger.warn(
+        `Cannot set trigger property "${path}" via setDataBinding`,
+      );
       return false;
     }
 
@@ -1839,6 +1933,7 @@ export class RiveCanvasComponent implements AfterViewInit {
       }
       this.#rive = null;
     }
+    this.#runtimeSdk = null;
 
     // Reset signals
     this.#riveInstance.set(null);

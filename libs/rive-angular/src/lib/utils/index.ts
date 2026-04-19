@@ -5,3 +5,4 @@ export * from './logger';
 export * from './validator';
 export * from './color-parser';
 export * from './runtime-config';
+export * from './rive-sdk';

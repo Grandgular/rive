@@ -256,6 +256,13 @@ describe('RiveCanvasComponent', () => {
     expect(component).toBeTruthy();
   });
 
+  it('should expose both selectors for compatibility', () => {
+    const selectors = (RiveCanvasComponent as any).ɵcmp?.selectors ?? [];
+    expect(selectors).toEqual(
+      expect.arrayContaining([['rive'], ['rive-canvas']]),
+    );
+  });
+
   it('should initialize with default values', () => {
     expect(component.autoplay()).toBe(true);
     expect(component.fit()).toBe(Fit.Contain);

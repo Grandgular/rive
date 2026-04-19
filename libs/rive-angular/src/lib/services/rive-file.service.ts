@@ -1,8 +1,8 @@
 import { Injectable, signal, Signal, inject } from '@angular/core';
-import { RiveFile, EventType } from '@rive-app/canvas';
 import { RIVE_DEBUG_CONFIG, RIVE_RUNTIME_CONFIG } from '../utils';
 import { RiveLogger } from '../utils';
 import { ensureRiveRuntimeReady } from '../utils/rive-runtime';
+import { CANVAS_RIVE_SDK, EventType, type RiveFile } from '../utils';
 
 /**
  * Status of RiveFile loading
@@ -217,14 +217,14 @@ export class RiveFileService {
     };
 
     try {
-      if (this.runtimeConfig) {
-        await ensureRiveRuntimeReady(this.runtimeConfig);
-      }
+      const runtimeSdk = this.runtimeConfig
+        ? (await ensureRiveRuntimeReady(this.runtimeConfig)).sdk
+        : CANVAS_RIVE_SDK;
 
       // Extract debug parameter - it's not part of RiveFile SDK API
       // eslint-disable-next-line @typescript-eslint/no-unused-vars
       const { debug, ...sdkParams } = params;
-      const file = new RiveFile(sdkParams);
+      const file = new runtimeSdk.RiveFile(sdkParams as never) as RiveFile;
 
       // Listeners must be attached BEFORE calling init() to avoid race conditions
       // where init() completes or fails synchronously/immediately.

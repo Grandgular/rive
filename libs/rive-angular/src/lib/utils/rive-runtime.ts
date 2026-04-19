@@ -1,47 +1,99 @@
-import { RuntimeLoader } from '@rive-app/canvas';
 import type { RiveRuntimeResolvedConfig } from './runtime-config';
+import {
+  DEFAULT_RIVE_RENDERER,
+  getFallbackRenderer,
+  loadRiveSdk,
+  type RiveRenderer,
+  type RiveSdkLoadResult,
+} from './rive-sdk';
 
-let runtimeInitPromise: Promise<void> | null = null;
-let isRuntimeReady = false;
-let configuredWasmUrl: string | undefined;
+interface RuntimeState {
+  runtimeInitPromise: Promise<void> | null;
+  isRuntimeReady: boolean;
+  configuredWasmUrl?: string;
+}
 
-function applyWasmUrl(config?: RiveRuntimeResolvedConfig | null): void {
+const runtimeStates = new Map<RiveRenderer, RuntimeState>();
+
+function getRuntimeState(renderer: RiveRenderer): RuntimeState {
+  const existing = runtimeStates.get(renderer);
+  if (existing) {
+    return existing;
+  }
+
+  const state: RuntimeState = {
+    runtimeInitPromise: null,
+    isRuntimeReady: false,
+  };
+  runtimeStates.set(renderer, state);
+  return state;
+}
+
+function applyWasmUrl(
+  sdk: RiveSdkLoadResult['sdk'],
+  state: RuntimeState,
+  config?: RiveRuntimeResolvedConfig | null,
+): void {
   const wasmUrl = config?.wasmUrl;
-  if (!wasmUrl || configuredWasmUrl === wasmUrl) return;
+  if (!wasmUrl || state.configuredWasmUrl === wasmUrl) return;
 
-  RuntimeLoader.setWasmUrl(wasmUrl);
-  configuredWasmUrl = wasmUrl;
+  sdk.RuntimeLoader.setWasmUrl(wasmUrl);
+  state.configuredWasmUrl = wasmUrl;
+}
+
+async function ensureRuntimeForRenderer(
+  renderer: RiveRenderer,
+  config?: RiveRuntimeResolvedConfig | null,
+): Promise<RiveSdkLoadResult> {
+  const runtime = await loadRiveSdk(renderer);
+  const state = getRuntimeState(renderer);
+
+  applyWasmUrl(runtime.sdk, state, config);
+
+  if (state.isRuntimeReady) {
+    return runtime;
+  }
+
+  if (state.runtimeInitPromise) {
+    await state.runtimeInitPromise;
+    return runtime;
+  }
+
+  state.runtimeInitPromise = runtime.sdk.RuntimeLoader.awaitInstance()
+    .then(() => {
+      state.isRuntimeReady = true;
+    })
+    .catch((error) => {
+      state.runtimeInitPromise = null;
+      throw error;
+    });
+
+  await state.runtimeInitPromise;
+  return runtime;
 }
 
 /**
  * Ensure Rive WASM runtime is initialized once across the app.
  * Safe to call from multiple concurrent code paths.
  */
-export function ensureRiveRuntimeReady(
+export async function ensureRiveRuntimeReady(
   config?: RiveRuntimeResolvedConfig | null,
-): Promise<void> {
+): Promise<RiveSdkLoadResult> {
   if (typeof window === 'undefined') {
-    return Promise.resolve();
+    return loadRiveSdk(config?.renderer ?? DEFAULT_RIVE_RENDERER);
   }
 
-  applyWasmUrl(config);
+  const preferredRenderer = config?.renderer ?? DEFAULT_RIVE_RENDERER;
+  const strictMode = config?.strict === true;
 
-  if (isRuntimeReady) {
-    return Promise.resolve();
+  try {
+    return await ensureRuntimeForRenderer(preferredRenderer, config);
+  } catch (primaryError) {
+    if (strictMode) {
+      throw primaryError;
+    }
+
+    const fallbackRenderer = getFallbackRenderer(preferredRenderer);
+    return ensureRuntimeForRenderer(fallbackRenderer, config);
   }
-
-  if (runtimeInitPromise) {
-    return runtimeInitPromise;
-  }
-
-  runtimeInitPromise = RuntimeLoader.awaitInstance()
-    .then(() => {
-      isRuntimeReady = true;
-    })
-    .catch((error) => {
-      runtimeInitPromise = null;
-      throw error;
-    });
-
-  return runtimeInitPromise;
 }

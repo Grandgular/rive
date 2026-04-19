@@ -2,6 +2,12 @@
 
 All notable changes to this project will be documented in this file.
 
+## [2.0.0-beta.2] - 2026-04-20
+
+### Fixed
+
+- Public `Rive` type: restored SDK-compatible event API on the stub interface (`on`, `off`, `removeAllRiveEventListeners`) so direct instance usage (e.g. `rive.on(EventType.RiveEvent, ...)`) type-checks again after v2 type-only exports.
+
 ## [2.0.0-beta.1] - 2026-04-20
 
 ### Fixed

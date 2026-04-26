@@ -2,7 +2,7 @@
 
 All notable changes to this project will be documented in this file.
 
-## [2.0.0-beta.4] - Unreleased
+## [2.0.0-beta.4] - 2026-04-26
 
 ### Changed
 

@@ -41,7 +41,6 @@ describe('ensureRiveRuntimeReady', () => {
     const result = await ensureRiveRuntimeReady({
       lazy: false,
       renderer: 'webgl2',
-      strict: false,
       wasmUrl: 'assets/rive/rive.wasm',
     });
 
@@ -51,22 +50,7 @@ describe('ensureRiveRuntimeReady', () => {
     expect(canvasAwaitInstance).not.toHaveBeenCalled();
   });
 
-  it('falls back to canvas when webgl2 init fails and strict is false', async () => {
-    webgl2AwaitInstance.mockRejectedValueOnce(new Error('WebGL2 unavailable'));
-    const { ensureRiveRuntimeReady } = await import('./rive-runtime');
-
-    const result = await ensureRiveRuntimeReady({
-      lazy: false,
-      renderer: 'webgl2',
-      strict: false,
-    });
-
-    expect(result.renderer).toBe('canvas');
-    expect(webgl2AwaitInstance).toHaveBeenCalledTimes(1);
-    expect(canvasAwaitInstance).toHaveBeenCalledTimes(1);
-  });
-
-  it('throws when webgl2 init fails and strict is true', async () => {
+  it('does not fall back when webgl2 init fails without fallback', async () => {
     webgl2AwaitInstance.mockRejectedValueOnce(new Error('WebGL2 unavailable'));
     const { ensureRiveRuntimeReady } = await import('./rive-runtime');
 
@@ -74,12 +58,26 @@ describe('ensureRiveRuntimeReady', () => {
       ensureRiveRuntimeReady({
         lazy: false,
         renderer: 'webgl2',
-        strict: true,
       }),
     ).rejects.toThrow('WebGL2 unavailable');
 
     expect(webgl2AwaitInstance).toHaveBeenCalledTimes(1);
     expect(canvasAwaitInstance).not.toHaveBeenCalled();
+  });
+
+  it('falls back to canvas when fallback is enabled', async () => {
+    webgl2AwaitInstance.mockRejectedValueOnce(new Error('WebGL2 unavailable'));
+    const { ensureRiveRuntimeReady } = await import('./rive-runtime');
+
+    const result = await ensureRiveRuntimeReady({
+      lazy: false,
+      renderer: 'webgl2',
+      fallback: true,
+    });
+
+    expect(result.renderer).toBe('canvas');
+    expect(webgl2AwaitInstance).toHaveBeenCalledTimes(1);
+    expect(canvasAwaitInstance).toHaveBeenCalledTimes(1);
   });
 
   it('combines primary and fallback errors when both runtimes fail', async () => {
@@ -91,8 +89,8 @@ describe('ensureRiveRuntimeReady', () => {
       ensureRiveRuntimeReady({
         lazy: false,
         renderer: 'webgl2',
-        strict: false,
+        fallback: true,
       }),
-    ).rejects.toThrow(/Could not initialize Rive[\s\S]*provideRiveRuntime/);
+    ).rejects.toThrow(/Could not initialize Rive[\s\S]*fallback: true/);
   });
 });

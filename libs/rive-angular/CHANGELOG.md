@@ -2,6 +2,13 @@
 
 All notable changes to this project will be documented in this file.
 
+## [2.0.0-beta.4] - Unreleased
+
+### Changed
+
+- Runtime fallback is now explicit via `provideRiveRuntime({ fallback: true })`; selecting `renderer: 'webgl2'` no longer requires installing `@rive-app/canvas`, and the default Canvas path no longer requires `@rive-app/webgl2`.
+- Removed the `strict` runtime option from the beta API; omit `fallback` to ship only the selected runtime.
+
 ## [2.0.0-beta.3] - 2026-04-20
 
 ### Fixed
@@ -25,14 +32,14 @@ All notable changes to this project will be documented in this file.
 
 ### Added
 
-- **Dual runtime support** for `@rive-app/canvas` and `@rive-app/webgl2` with `provideRiveRuntime()` options `renderer` and `strict`, and automatic fallback when `strict` is `false`.
+- **Dual runtime support** for `@rive-app/canvas` and `@rive-app/webgl2` with `provideRiveRuntime()` options `renderer` and explicit `fallback`.
 - **Preferred component selector**: `<rive>` (with `<rive-canvas>` still supported as a legacy alias).
-- **Runtime tests** covering `webgl2`, fallback behavior, and strict mode failures.
+- **Runtime tests** covering `webgl2`, single-runtime behavior, and explicit fallback failures.
 
 ### Changed
 
 - Runtime SDK loading now uses dynamic imports for both renderers and no longer keeps a static runtime import of `@rive-app/canvas`.
-- Runtime error handling now emits clearer missing-package and fallback failure messages, including install hints and `strict: true` guidance.
+- Runtime error handling now emits clearer missing-package and fallback failure messages, including install hints for single-runtime and fallback setups.
 - Runtime initialization defaults are centralized through `DEFAULT_RIVE_RUNTIME_RESOLVED_CONFIG` and reused by both `RiveCanvasComponent` and `RiveFileService`.
 - README/docs were updated to describe optional runtime peers and renderer/fallback installation matrix.
 

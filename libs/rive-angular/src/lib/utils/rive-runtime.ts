@@ -90,22 +90,22 @@ export async function ensureRiveRuntimeReady(
   }
 
   const preferredRenderer = config?.renderer ?? DEFAULT_RIVE_RENDERER;
-  const strictMode = config?.strict === true;
+  const shouldFallback = config?.fallback === true;
 
   try {
     return await ensureRuntimeForRenderer(preferredRenderer, config);
   } catch (primaryError) {
-    if (strictMode) {
+    if (!shouldFallback) {
       throw primaryError;
     }
 
-    const fallbackRenderer = getFallbackRenderer(preferredRenderer);
+    const fallbackTargetRenderer = getFallbackRenderer(preferredRenderer);
     try {
-      return await ensureRuntimeForRenderer(fallbackRenderer, config);
+      return await ensureRuntimeForRenderer(fallbackTargetRenderer, config);
     } catch (fallbackError) {
       throw composeFallbackRiveRuntimeError(
         preferredRenderer,
-        fallbackRenderer,
+        fallbackTargetRenderer,
         primaryError,
         fallbackError,
       );

@@ -61,7 +61,7 @@ export function composeFallbackRiveRuntimeError(
     `Primary error: ${primaryMsg}`,
     `Fallback error: ${fallbackMsg}`,
     `Install both runtimes for automatic fallback: npm install ${pkgPreferred} ${pkgFallback}`,
-    `Or install only the runtime you need and use provideRiveRuntime({ renderer: "${preferred}", strict: true }) (or renderer: "${fallback}" with strict: true).`,
+    `Or remove fallback: true from provideRiveRuntime({ renderer: "${preferred}" }) to ship only the selected runtime.`,
   ].join('\n');
   const err = new Error(message);
   (err as Error & { cause?: unknown }).cause = {

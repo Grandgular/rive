@@ -90,7 +90,7 @@ npm uninstall ng-rive
 npm install @grandgular/rive-angular @rive-app/canvas
 ```
 
-If you use WebGL2 (`provideRiveRuntime({ renderer: 'webgl2' })`) or rely on automatic fallback from WebGL2 to Canvas, also install `@rive-app/webgl2` (see [Installation](#installation)).
+If you use WebGL2 (`provideRiveRuntime({ renderer: 'webgl2' })`) install `@rive-app/webgl2` instead of `@rive-app/canvas`. Install both runtime packages only when you explicitly configure renderer fallback (see [Installation](#installation)).
 
 ### 2. Update imports
 
@@ -151,13 +151,13 @@ onLoaded() {
 
 ## Installation
 
-`@rive-app/canvas` and `@rive-app/webgl2` are **optional peer dependencies**: install the runtime package(s) that match how you configure the library. The bundler only pulls in the SDK that is actually imported for your `renderer` / fallback path.
+`@rive-app/canvas` and `@rive-app/webgl2` are **optional peer dependencies**: install the runtime package(s) that match how you configure the library. The bundler only pulls in the SDK that is imported for your selected `renderer`, plus the other runtime if you set `fallback: true`.
 
 | Goal | Packages to install |
 |------|------------------------|
 | Canvas only (default `renderer`, or you never use WebGL2) | `@grandgular/rive-angular` + `@rive-app/canvas` |
-| WebGL2 only (e.g. `renderer: 'webgl2'` and `strict: true`, so no Canvas fallback) | `@grandgular/rive-angular` + `@rive-app/webgl2` |
-| WebGL2 with automatic fallback to Canvas (`strict: false`) | `@grandgular/rive-angular` + `@rive-app/canvas` + `@rive-app/webgl2` |
+| WebGL2 only (`renderer: 'webgl2'`) | `@grandgular/rive-angular` + `@rive-app/webgl2` |
+| WebGL2 with explicit fallback to Canvas (`fallback: true`) | `@grandgular/rive-angular` + `@rive-app/canvas` + `@rive-app/webgl2` |
 
 ```bash
 npm install @grandgular/rive-angular @rive-app/canvas
@@ -175,7 +175,7 @@ Add WebGL2 when needed:
 npm install @rive-app/webgl2
 ```
 
-If a required package is missing, initialization fails with an error that names the package and suggests either installing it or setting `strict: true` to avoid loading that renderer/fallback path.
+If a required package is missing, initialization fails with an error that names the package. A second runtime package is required only when `fallback: true`.
 
 ## Quick Start
 
@@ -645,7 +645,6 @@ export const appConfig: ApplicationConfig = {
       wasmUrl: 'assets/rive/rive.v1.wasm',
       lazy: true,
       renderer: 'webgl2',
-      strict: false,
     }),
   ],
 };
@@ -656,16 +655,15 @@ export const appConfig: ApplicationConfig = {
 ```typescript
 provideRiveRuntime({
   renderer: 'webgl2',
-  strict: false,
+  fallback: true,
 });
 ```
 
 - `renderer` is optional; default is `'canvas'`.
-- `strict` is optional; default is `false`.
-- With `strict: false`, the library automatically falls back to the other renderer if the preferred renderer fails to initialize. **Both** `@rive-app/canvas` and `@rive-app/webgl2` must be installed for fallback to succeed if the other SDK is needed.
-- With `strict: true`, fallback is disabled and initialization fails fast if the chosen renderer cannot load — useful when you intentionally ship only one runtime package.
+- `fallback` is optional; omit it or set `false` to ship only one runtime package.
+- With `fallback: true`, the library falls back to the other renderer if the preferred renderer fails to initialize. **Both** `@rive-app/canvas` and `@rive-app/webgl2` must be installed for fallback to succeed.
 
-If fallback fails (for example WebGL2 unavailable **and** the Canvas package is not installed), the error explains what failed and suggests installing the missing package or using `strict: true` with a single renderer.
+If fallback fails (for example WebGL2 unavailable **and** the Canvas package is not installed), the error explains what failed and suggests installing the missing package or removing `fallback: true` to ship a single renderer.
 
 ### Migration from `provideAppInitializer`
 
@@ -726,7 +724,7 @@ interface RiveRuntimeConfig {
   wasmUrl?: string;
   lazy?: true;
   renderer?: 'canvas' | 'webgl2';
-  strict?: boolean;
+  fallback?: boolean;
 }
 ```
 
@@ -734,7 +732,7 @@ interface RiveRuntimeConfig {
 - `lazy` omitted - eager initialization on startup.
 - `lazy: true` - deferred initialization at first runtime usage.
 - `renderer` omitted - defaults to `'canvas'` for backward compatibility.
-- `strict` omitted - defaults to `false` and allows automatic fallback.
+- `fallback` omitted - no automatic fallback; only the selected runtime package is loaded.
 
 ### RiveCanvasComponent
 

@@ -20,7 +20,7 @@ export interface RiveRuntimeConfig {
   wasmUrl?: string;
   lazy?: true;
   renderer?: RiveRenderer;
-  strict?: boolean;
+  fallback?: boolean;
 }
 
 /**
@@ -30,14 +30,14 @@ export interface RiveRuntimeResolvedConfig {
   wasmUrl?: string;
   lazy: boolean;
   renderer: RiveRenderer;
-  strict: boolean;
+  fallback: boolean;
 }
 
-/** Default runtime options when `provideRiveRuntime` is not used (canvas, non-strict). */
+/** Default runtime options when `provideRiveRuntime` is not used (canvas, no fallback). */
 export const DEFAULT_RIVE_RUNTIME_RESOLVED_CONFIG: RiveRuntimeResolvedConfig = {
   lazy: false,
   renderer: DEFAULT_RIVE_RENDERER,
-  strict: false,
+  fallback: false,
 };
 
 /**
@@ -49,11 +49,13 @@ export const RIVE_RUNTIME_CONFIG =
 function resolveRuntimeConfig(
   config?: RiveRuntimeConfig,
 ): RiveRuntimeResolvedConfig {
+  const renderer = config?.renderer ?? DEFAULT_RIVE_RENDERER;
+
   return {
     wasmUrl: config?.wasmUrl,
     lazy: config?.lazy === true,
-    renderer: config?.renderer ?? DEFAULT_RIVE_RENDERER,
-    strict: config?.strict === true,
+    renderer,
+    fallback: config?.fallback === true,
   };
 }
 

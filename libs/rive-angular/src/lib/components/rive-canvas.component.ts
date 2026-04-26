@@ -616,7 +616,7 @@ export class RiveCanvasComponent implements AfterViewInit {
           this.#runtimeConfig ?? DEFAULT_RIVE_RUNTIME_RESOLVED_CONFIG;
         const preferredRenderer =
           runtimeConfig.renderer ?? DEFAULT_RIVE_RENDERER;
-        const strictMode = runtimeConfig.strict;
+        const shouldFallback = runtimeConfig.fallback;
 
         void ensureRiveRuntimeReady(runtimeConfig)
           .then(async (runtimeResult) => {
@@ -624,7 +624,7 @@ export class RiveCanvasComponent implements AfterViewInit {
               createRiveInstance(runtimeResult.sdk);
             } catch (primaryCreateError) {
               if (
-                strictMode ||
+                !shouldFallback ||
                 runtimeResult.renderer !== preferredRenderer ||
                 !this.shouldFallbackOnRendererError(
                   primaryCreateError,
@@ -638,7 +638,7 @@ export class RiveCanvasComponent implements AfterViewInit {
                 ...runtimeConfig,
                 lazy: runtimeConfig.lazy,
                 renderer: getFallbackRenderer(preferredRenderer),
-                strict: true,
+                fallback: false,
               });
               createRiveInstance(fallbackRuntime.sdk);
             }

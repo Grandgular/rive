@@ -1,24 +1,40 @@
-<!-- Synced with libs/rive-angular/README.md — update both when changing the public README. -->
+# Rive for Angular (Grandgular)
 
-# @grandgular/rive-angular
+Primary npm packages: [`@grandgular/rive-angular-webgl2`](https://www.npmjs.com/package/@grandgular/rive-angular-webgl2) (recommended) and [`@grandgular/rive-angular-canvas`](https://www.npmjs.com/package/@grandgular/rive-angular-canvas). The legacy package `@grandgular/rive-angular` is **not** maintained in this repo; migrate to one of the two packages (see [CHANGELOG](CHANGELOG.md)).
 
-[![npm version](https://img.shields.io/npm/v/@grandgular/rive-angular.svg)](https://www.npmjs.com/package/@grandgular/rive-angular)
-[![npm downloads](https://img.shields.io/npm/dm/@grandgular/rive-angular.svg)](https://www.npmjs.com/package/@grandgular/rive-angular)
-[![Bundle Size](https://img.shields.io/bundlephobia/minzip/@grandgular/rive-angular)](https://bundlephobia.com/package/@grandgular/rive-angular)
+
+[![npm webgl2](https://img.shields.io/npm/v/@grandgular/rive-angular-webgl2.svg?label=webgl2)](https://www.npmjs.com/package/@grandgular/rive-angular-webgl2)
+[![npm canvas](https://img.shields.io/npm/v/@grandgular/rive-angular-canvas.svg?label=canvas)](https://www.npmjs.com/package/@grandgular/rive-angular-canvas)
 [![Angular](https://img.shields.io/badge/Angular-18%2B-red)](https://angular.dev)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 
-![Rive Angular showcase preview](https://raw.githubusercontent.com/Grandgular/rive/main/libs/rive-angular/docs/showcase-afi.gif)
-
 Modern Angular wrapper for [Rive](https://rive.app) animations with reactive state management, built with Angular signals and zoneless architecture.
 
-**1.x** is the stable major line: the public API follows [Semantic Versioning](https://semver.org/).
+The public API follows [Semantic Versioning](https://semver.org/).
+
+**Why `2.0.0` for new package names?**  
+`@grandgular/rive-angular-webgl2` and `@grandgular/rive-angular-canvas` are **separate** npm packages (each has its own version line in the registry), but we ship them as **2.0.0** to mark one **product-level major**: the old single package **`@grandgular/rive-angular` is no longer built here**, you must **pick a renderer package** and **change import paths and peer dependencies** — that is a breaking change for consumers, even where the Angular component API stays the same. Details: [CHANGELOG](CHANGELOG.md) (section **2.0.0**) and [Migration from `@grandgular/rive-angular`](#migration-from-grandgularrive-angular) below.
+
+## Packages (WebGL2 vs Canvas)
+
+Rive’s web runtimes are separate npm packages; this workspace mirrors the official [Canvas vs WebGL2](https://rive.app/docs/runtimes/web/canvas-vs-webgl) and [React](https://rive.app/docs/runtimes/react/react) model with **renderer-specific** Angular packages:
+
+| npm package | Rive runtime (peer) | Use case |
+|-------------|---------------------|----------|
+| `@grandgular/rive-angular-webgl2` | `@rive-app/webgl2` | **Recommended** — Rive Renderer, best quality/performance |
+| `@grandgular/rive-angular-canvas` | `@rive-app/canvas` | Smaller bundle, simpler vector/raster work |
+
+Internal shared code is maintained in `libs/rive-angular-core` and **embedded** in each published package. Renderer implementation files are kept aligned between canvas and webgl2, with only the runtime adapter differing. After changing shared code or shared renderer logic, run: `npm run sync:rive-angular-core`
+
+### Migration from `@grandgular/rive-angular`
+
+The npm package `@grandgular/rive-angular` is **not** built from this repository anymore. Move to either **`@grandgular/rive-angular-webgl2`** (with `@rive-app/webgl2`) or **`@grandgular/rive-angular-canvas`** (with `@rive-app/canvas`) and change your import path; the public API (components, `RiveFileService`, `provideRiveRuntime`, etc.) is unchanged. See [CHANGELOG](CHANGELOG.md) (v2.0.0).
 
 ## What is Rive?
 
 [Rive](https://rive.app) is a real-time interactive design and animation tool. It allows designers and developers to create animations that respond to different states and user inputs. Rive animations are lightweight, interactive, and can be used in apps, games, and websites.
 
-## Why @grandgular/rive-angular?
+## Why use these packages?
 
 This library provides a **modern, Angular-native** way to integrate Rive animations into your Angular applications:
 
@@ -37,7 +53,7 @@ This library provides a **modern, Angular-native** way to integrate Rive animati
 
 [ng-rive](https://www.npmjs.com/package/ng-rive) was the previous Angular wrapper for Rive, but it has been **unmaintained since 2021** and is incompatible with modern Angular versions:
 
-| Feature | ng-rive | @grandgular/rive-angular |
+| Feature | ng-rive | @grandgular/rive-angular-webgl2 |
 |---------|---------|--------------------------|
 | Angular version | 9-12 (legacy) | 18+ (modern) |
 | Architecture | Modules, Zone.js | Signals, standalone |
@@ -52,7 +68,7 @@ This library provides a **modern, Angular-native** way to integrate Rive animati
 
 This library follows the design principles of the official [rive-react](https://github.com/rive-app/rive-react) library but adapts them to Angular's reactive paradigm:
 
-| Aspect | rive-react | @grandgular/rive-angular |
+| Aspect | rive-react | @grandgular/rive-angular-webgl2 |
 |--------|------------|--------------------------|
 | Component API | `<Rive>` component | `<rive-canvas>` |
 | Reactivity | Hooks (useState, useEffect) | Signals |
@@ -70,14 +86,14 @@ Both libraries provide similar features and follow the same philosophy of provid
 
 ```bash
 npm uninstall ng-rive
-npm install @grandgular/rive-angular @rive-app/canvas
+npm install @grandgular/rive-angular-webgl2 @rive-app/webgl2
 ```
 
 ### 2. Update imports
 
-| ng-rive | @grandgular/rive-angular |
+| ng-rive | @grandgular/rive-angular-webgl2 |
 |---------|--------------------------|
-| `import { RiveModule } from 'ng-rive'` | `import { RiveCanvasComponent } from '@grandgular/rive-angular'` |
+| `import { RiveModule } from 'ng-rive'` | `import { RiveCanvasComponent } from '@grandgular/rive-angular-webgl2'` |
 | Add `RiveModule` to `NgModule.imports` | Add `RiveCanvasComponent` to `imports` of standalone component |
 
 ### 3. Update templates
@@ -91,7 +107,7 @@ npm install @grandgular/rive-angular @rive-app/canvas
 </canvas>
 ```
 
-**@grandgular/rive-angular:**
+**@grandgular/rive-angular-webgl2:**
 
 ```html
 <!-- Standalone, signals, zoneless -->
@@ -114,7 +130,7 @@ npm install @grandgular/rive-angular @rive-app/canvas
 </canvas>
 ```
 
-**@grandgular/rive-angular:**
+**@grandgular/rive-angular-webgl2:**
 
 ```html
 <rive-canvas
@@ -133,13 +149,13 @@ onLoaded() {
 ## Installation
 
 ```bash
-npm install @grandgular/rive-angular @rive-app/canvas
+npm install @grandgular/rive-angular-webgl2 @rive-app/webgl2
 ```
 
 Or with yarn:
 
 ```bash
-yarn add @grandgular/rive-angular @rive-app/canvas
+yarn add @grandgular/rive-angular-webgl2 @rive-app/webgl2
 ```
 
 ## Quick Start
@@ -148,7 +164,7 @@ yarn add @grandgular/rive-angular @rive-app/canvas
 
 ```typescript
 import { Component } from '@angular/core';
-import { RiveCanvasComponent, Fit, Alignment } from '@grandgular/rive-angular';
+import { RiveCanvasComponent, Fit, Alignment } from '@grandgular/rive-angular-webgl2';
 
 @Component({
   selector: 'app-root',
@@ -189,7 +205,7 @@ export class AppComponent {
 
 ```typescript
 import { Component, viewChild } from '@angular/core';
-import { RiveCanvasComponent } from '@grandgular/rive-angular';
+import { RiveCanvasComponent } from '@grandgular/rive-angular-webgl2';
 
 @Component({
   selector: 'app-interactive',
@@ -291,7 +307,7 @@ Use the `dataBindings` input for reactive, template-driven data binding:
 
 ```typescript
 import { Component, signal } from '@angular/core';
-import { RiveCanvasComponent } from '@grandgular/rive-angular';
+import { RiveCanvasComponent } from '@grandgular/rive-angular-webgl2';
 
 @Component({
   selector: 'app-data-binding',
@@ -349,7 +365,7 @@ Use methods for direct, programmatic control:
 
 ```typescript
 import { Component, viewChild } from '@angular/core';
-import { RiveCanvasComponent } from '@grandgular/rive-angular';
+import { RiveCanvasComponent } from '@grandgular/rive-angular-webgl2';
 
 @Component({
   selector: 'app-imperative',
@@ -405,7 +421,7 @@ export class ImperativeComponent {
 The library exports color conversion utilities for advanced use cases:
 
 ```typescript
-import { parseRiveColor, riveColorToArgb, riveColorToHex } from '@grandgular/rive-angular';
+import { parseRiveColor, riveColorToArgb, riveColorToHex } from '@grandgular/rive-angular-webgl2';
 
 // Parse various color formats
 const color1 = parseRiveColor('#FF5733');        // { r: 255, g: 87, b: 51, a: 255 }
@@ -489,7 +505,7 @@ For better performance, you can preload and cache .riv files:
 
 ```typescript
 import { Component, inject, DestroyRef } from '@angular/core';
-import { RiveCanvasComponent, RiveFileService } from '@grandgular/rive-angular';
+import { RiveCanvasComponent, RiveFileService } from '@grandgular/rive-angular-webgl2';
 
 @Component({
   selector: 'app-preload',
@@ -537,7 +553,7 @@ The library provides a built-in debug mode to help you troubleshoot animations.
 Enable debug mode globally in your `app.config.ts`:
 
 ```typescript
-import { provideRiveDebug } from '@grandgular/rive-angular';
+import { provideRiveDebug } from '@grandgular/rive-angular-webgl2';
 
 export const appConfig: ApplicationConfig = {
   providers: [
@@ -574,7 +590,7 @@ Initializes runtime on app startup:
 
 ```typescript
 import { ApplicationConfig } from '@angular/core';
-import { provideRiveRuntime } from '@grandgular/rive-angular';
+import { provideRiveRuntime } from '@grandgular/rive-angular-webgl2';
 
 export const appConfig: ApplicationConfig = {
   providers: [
@@ -589,7 +605,7 @@ Initializes runtime only when first needed (first `rive-canvas` init or `RiveFil
 
 ```typescript
 import { ApplicationConfig } from '@angular/core';
-import { provideRiveRuntime } from '@grandgular/rive-angular';
+import { provideRiveRuntime } from '@grandgular/rive-angular-webgl2';
 
 export const appConfig: ApplicationConfig = {
   providers: [
@@ -718,7 +734,7 @@ import {
   EventType,
   LoopType,
   type LoopEvent,
-} from '@grandgular/rive-angular';
+} from '@grandgular/rive-angular-webgl2';
 
 @Component({
   imports: [RiveCanvasComponent],
@@ -755,7 +771,7 @@ export class LifecycleDemoComponent {
 }
 ```
 
-`LoopType` and `LoopEvent` are re-exported from `@grandgular/rive-angular` for convenience.
+`LoopType` and `LoopEvent` are re-exported from the package you install (`@grandgular/rive-angular-webgl2` or `@grandgular/rive-angular-canvas`) for convenience.
 
 #### Public Signals (Readonly)
 
@@ -845,7 +861,7 @@ The library is fully compatible with Angular Universal and server-side rendering
 - 📝 **Better error codes** for programmatic error handling
 - 🧪 **Improved testability** with DI-based services
 
-See [CHANGELOG.md](libs/rive-angular/CHANGELOG.md) for complete details, migration guide, and all improvements.
+See [CHANGELOG.md](CHANGELOG.md) for complete details, migration guide, and all improvements.
 
 ## Requirements
 

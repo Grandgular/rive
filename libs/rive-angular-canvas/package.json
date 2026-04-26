@@ -1,0 +1,50 @@
+{
+  "name": "@grandgular/rive-angular-canvas",
+  "version": "2.0.0",
+  "description": "Angular wrapper for Rive using the @rive-app/canvas (Canvas2D) runtime — smaller bundle, simpler graphics.",
+  "keywords": [
+    "angular",
+    "rive",
+    "animation",
+    "canvas",
+    "graphics",
+    "state-machine",
+    "standalone",
+    "signals",
+    "typescript",
+    "ng",
+    "interactive",
+    "reactive",
+    "ng-rive",
+    "zoneless",
+    "rive-angular",
+    "angular-animation",
+    "canvas2d",
+    "data-binding",
+    "viewmodel"
+  ],
+  "author": "Andrei Shpileuski",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/Grandgular/rive.git",
+    "directory": "libs/rive-angular-canvas"
+  },
+  "homepage": "https://github.com/Grandgular/rive/tree/main/libs/rive-angular-canvas#readme",
+  "bugs": {
+    "url": "https://github.com/Grandgular/rive/issues"
+  },
+  "engines": {
+    "node": ">=20.0.0",
+    "npm": ">=10.0.0"
+  },
+  "peerDependencies": {
+    "@angular/common": ">=18.0.0 <22.0.0",
+    "@angular/core": ">=18.0.0 <22.0.0",
+    "@rive-app/canvas": "^2.35.0"
+  },
+  "publishConfig": {
+    "access": "public"
+  },
+  "sideEffects": false
+}

@@ -3,11 +3,15 @@
   "version": "0.0.0",
   "license": "MIT",
   "scripts": {
-    "build:lib": "nx build rive-angular",
-    "test:lib": "nx test rive-angular",
-    "lint:lib": "nx lint rive-angular",
-    "pack:lib": "cd dist/libs/rive-angular && npm pack --dry-run",
-    "publish:lib": "cd dist/libs/rive-angular && npm publish --access public"
+    "build:lib": "nx run-many -t build -p rive-angular-canvas,rive-angular-webgl2",
+    "test:lib": "nx run-many -t test -p rive-angular-core,rive-angular-canvas,rive-angular-webgl2",
+    "lint:lib": "nx run-many -t lint -p rive-angular-canvas,rive-angular-webgl2,rive-angular-core",
+    "pack:lib": "npm run pack:lib:canvas && npm run pack:lib:webgl2",
+    "pack:lib:canvas": "cd dist/libs/rive-angular-canvas && npm pack --dry-run",
+    "pack:lib:webgl2": "cd dist/libs/rive-angular-webgl2 && npm pack --dry-run",
+    "publish:lib:canvas": "cd dist/libs/rive-angular-canvas && npm publish --access public",
+    "publish:lib:webgl2": "cd dist/libs/rive-angular-webgl2 && npm publish --access public",
+    "sync:rive-angular-core": "node scripts/sync-rive-angular-core-embedded.mjs"
   },
   "private": true,
   "devDependencies": {
@@ -62,6 +66,7 @@
     "@angular/platform-browser-dynamic": "~21.1.0",
     "@angular/router": "~21.1.0",
     "@rive-app/canvas": "^2.35.0",
+    "@rive-app/webgl2": "^2.37.4",
     "rxjs": "~7.8.0"
   },
   "nx": {

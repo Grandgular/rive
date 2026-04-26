@@ -43,7 +43,7 @@ jobs:
         if: matrix.node-version == '20.x'
         uses: codecov/codecov-action@v4
         with:
-          files: ./coverage/libs/rive-angular/lcov.info
+          files: ./coverage/libs/rive-angular-canvas/lcov.info,./coverage/libs/rive-angular-webgl2/lcov.info,./coverage/libs/rive-angular-core/lcov.info
           flags: unittests
           name: codecov-umbrella
           fail_ci_if_error: false
@@ -69,5 +69,5 @@ jobs:
       - name: Build library
         run: npm run build:lib
 
-      - name: Pack library (dry-run)
+      - name: Pack libraries (dry-run)
         run: npm run pack:lib

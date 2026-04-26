@@ -1,0 +1,50 @@
+{
+  "name": "@grandgular/rive-angular-webgl2",
+  "version": "2.0.0",
+  "description": "Angular wrapper for Rive using the @rive-app/webgl2 runtime (Rive Renderer) — recommended for quality and performance.",
+  "keywords": [
+    "angular",
+    "rive",
+    "animation",
+    "webgl2",
+    "graphics",
+    "state-machine",
+    "standalone",
+    "signals",
+    "typescript",
+    "ng",
+    "interactive",
+    "reactive",
+    "ng-rive",
+    "zoneless",
+    "rive-angular",
+    "angular-animation",
+    "rive-renderer",
+    "data-binding",
+    "viewmodel"
+  ],
+  "author": "Andrei Shpileuski",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/Grandgular/rive.git",
+    "directory": "libs/rive-angular-webgl2"
+  },
+  "homepage": "https://github.com/Grandgular/rive/tree/main/libs/rive-angular-webgl2#readme",
+  "bugs": {
+    "url": "https://github.com/Grandgular/rive/issues"
+  },
+  "engines": {
+    "node": ">=20.0.0",
+    "npm": ">=10.0.0"
+  },
+  "peerDependencies": {
+    "@angular/common": ">=18.0.0 <22.0.0",
+    "@angular/core": ">=18.0.0 <22.0.0",
+    "@rive-app/webgl2": "^2.35.0"
+  },
+  "publishConfig": {
+    "access": "public"
+  },
+  "sideEffects": false
+}

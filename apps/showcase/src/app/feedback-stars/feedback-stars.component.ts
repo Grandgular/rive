@@ -1,5 +1,8 @@
 import { Component, signal, ChangeDetectionStrategy } from '@angular/core';
-import { RiveCanvasComponent, RiveEvent } from '@grandgular/rive-angular';
+import {
+  RiveCanvasComponent,
+  RiveEvent,
+} from '@grandgular/rive-angular-webgl2';
 
 @Component({
   selector: 'app-feedback-stars',

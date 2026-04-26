@@ -1,0 +1,14 @@
+{
+  "$schema": "../../node_modules/ng-packagr/ng-package.schema.json",
+  "dest": "../../dist/libs/rive-angular-webgl2",
+  "assets": [
+    {
+      "glob": "docs/**/*",
+      "input": ".",
+      "output": "."
+    }
+  ],
+  "lib": {
+    "entryFile": "src/index.ts"
+  }
+}
